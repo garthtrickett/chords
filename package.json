@@ -1,0 +1,35 @@
+{
+  "name": "bun-sqlite-chords-app",
+  "version": "1.0.0",
+  "description": "A simple type-safe API project with Elysia, Eden Treaty, Kysely, and Bun SQLite.",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "bun build ./src/server.ts --outdir ./dist",
+    "start": "bun dist/server.js",
+    "db:migrate": "bun src/db/migrations/migrate.ts",
+    "db:generate-types": "npx kysely-codegen --dialect=bun-sqlite --url=./chords.db --out-file=./types/database.ts",
+    "check-types": "tsc --noEmit -p .",
+    "dev:server": "bun --watch src/server.ts",
+    "dev:client": "vite",
+    "dev": "concurrently \"bun run dev:server\" \"bun run dev:client\""
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@elysiajs/cors": "^1.0.2",
+    "@elysiajs/eden": "^1.0.13",
+    "@elysiajs/static": "^1.0.3",
+    "elysia": "^1.0.22",
+    "kysely": "^0.28.8",
+    "kysely-bun-sqlite": "^0.4.0",
+    "nanoid": "^5.0.7",
+    "tone": "^15.0.4"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "concurrently": "^8.2.2",
+    "kysely-codegen": "^0.15.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}

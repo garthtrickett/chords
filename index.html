@@ -1,0 +1,67 @@
+<!-- File: ./public/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Coder with Saving</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        background-color: #f0f0f0;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        gap: 1rem;
+      }
+      #editorTextarea {
+        border: 1px solid #ccc;
+        width: 80%;
+        max-width: 800px;
+        height: 300px;
+        font-size: 1.2em;
+        padding: 10px;
+        font-family: monospace;
+      }
+      .controls {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+      button,
+      select,
+      input {
+        font-size: 1em;
+        padding: 8px 12px;
+      }
+      select {
+        min-width: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <h1>Live Coder</h1>
+      <textarea id="editorTextarea">C4 D4 E4 G4</textarea>
+      <div class="controls">
+        <button id="startButton">Start Audio</button>
+        <input
+          type="text"
+          id="chordNameInput"
+          placeholder="Pattern Name (e.g., 'Verse 1')"
+        />
+        <button id="saveButton" disabled>Save Pattern</button>
+      </div>
+      <div class="controls">
+        <select id="loadSelect">
+          <option value="">Load a saved pattern...</option>
+        </select>
+      </div>
+    </div>
+    <script type="module" src="/src/client.ts"></script>
+  </body>
+</html>

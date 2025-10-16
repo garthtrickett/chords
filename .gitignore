@@ -1,0 +1,59 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Build output
+/dist
+
+
+a.txt
+
+# SQLite Database
+# You generally don't want to commit the database file itself,
+# only the migrations that build it.
+*.db
+*.db-journal
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+# IMPORTANT: Never commit your .env file!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and editor directories
+.idea
+.vscode/
+
+# TypeScript cache files
+*.tsbuildinfo
+
+# Vite cache
+.vite/
+
+# Test reports and coverage
+coverage
+.nyc_output
+
+# Temporary files from the bundling script
+a.txt
+
+# Bun-related
+.bun/
+bun.lockb
