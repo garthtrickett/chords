@@ -1,13 +1,14 @@
 // src/client.ts
-import * as Tone from "tone";
+import { getTransport, Synth, Sequence, start as startAudio } from "tone";
 import { treaty } from "@elysiajs/eden";
 import type { App } from "./server";
-import type { SerializableChord } from "../types/database"; // <-- MODIFIED: Import SerializableChord
+import type { SerializableChord } from "../types/database";
 
 // --- 1. SETUP & DOM ELEMENTS ---
 const editorTextarea =
   document.querySelector<HTMLTextAreaElement>("#editorTextarea");
 const startButton = document.querySelector<HTMLButtonElement>("#startButton");
+const stopButton = document.querySelector<HTMLButtonElement>("#stopButton");
 const saveButton = document.querySelector<HTMLButtonElement>("#saveButton");
 const chordNameInput =
   document.querySelector<HTMLInputElement>("#chordNameInput");
@@ -16,6 +17,7 @@ const loadSelect = document.querySelector<HTMLSelectElement>("#loadSelect");
 if (
   !editorTextarea ||
   !startButton ||
+  !stopButton ||
   !saveButton ||
   !chordNameInput ||
   !loadSelect
@@ -25,9 +27,10 @@ if (
 
 // --- 2. INITIALIZE CLIENT & AUDIO ENGINE ---
 const client = treaty<App>("http://localhost:8080");
-const synth = new Tone.Synth().toDestination();
-let sequence = new Tone.Sequence().start(0);
-let savedChords: SerializableChord[] = []; // <-- MODIFIED: Use SerializableChord type
+const synth = new Synth().toDestination();
+const transport = getTransport();
+let sequence = new Sequence().start(0);
+let savedChords: SerializableChord[] = [];
 
 // --- 3. PARSING LOGIC ---
 function parseCode(code: string): string[] {
@@ -50,14 +53,12 @@ async function fetchAndPopulateChords() {
     return;
   }
 
-  // The 'data' from Eden will be plain objects, matching our SerializableChord type.
   savedChords = chords || [];
 
   if (loadSelect) {
     loadSelect.innerHTML = '<option value="">Load a saved pattern...</option>';
     for (const chord of savedChords) {
       if (chord.id) {
-        // <-- MODIFIED: Add null check for id
         const option = document.createElement("option");
         option.value = chord.id;
         option.textContent = chord.name;
@@ -105,21 +106,31 @@ loadSelect.addEventListener("change", () => {
 
 // --- 6. AUDIO START & INITIALIZATION ---
 startButton.addEventListener("click", async () => {
-  await Tone.start();
-  Tone.Transport.start();
+  await startAudio();
+  transport.start();
   console.log("Audio context started.");
 
   startButton.style.display = "none";
-  if (saveButton) saveButton.disabled = false;
+  stopButton.style.display = "inline-block";
 
   const initialNotes = parseCode(editorTextarea.value);
-  sequence = new Tone.Sequence(
+  sequence = new Sequence(
     (time, note) => {
       synth.triggerAttackRelease(note, "8n", time);
     },
     initialNotes,
     "4n",
   ).start(0);
-
-  await fetchAndPopulateChords();
 });
+
+stopButton.addEventListener("click", () => {
+  transport.stop();
+  console.log("Audio transport stopped.");
+
+  stopButton.style.display = "none";
+  startButton.style.display = "inline-block";
+});
+
+// --- 7. APP INITIALIZATION ---
+// MODIFIED: Fetch chords on page load to make the dropdown immediately useful.
+fetchAndPopulateChords();
