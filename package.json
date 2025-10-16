@@ -1,6 +1,7 @@
 {
   "name": "bun-sqlite-chords-app",
   "version": "1.0.0",
+  "type": "module",
   "description": "A simple type-safe API project with Elysia, Eden Treaty, Kysely, and Bun SQLite.",
   "main": "dist/server.js",
   "scripts": {
@@ -19,11 +20,18 @@
     "@elysiajs/cors": "^1.0.2",
     "@elysiajs/eden": "^1.0.13",
     "@elysiajs/static": "^1.0.3",
+    "@tailwindcss/postcss": "^4.1.14",
+    "@tailwindcss/vite": "^4.1.14",
+    "autoprefixer": "^10.4.21",
     "elysia": "^1.0.22",
     "kysely": "^0.28.8",
     "kysely-bun-sqlite": "^0.4.0",
+    "lit-html": "^3.3.1",
     "nanoid": "^5.0.7",
-    "tone": "^15.0.4"
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.14",
+    "tone": "^15.0.4",
+    "xstate": "^5.23.0"
   },
   "devDependencies": {
     "bun-types": "latest",
