@@ -1,4 +1,4 @@
-<!-- File: ./public/index.html -->
+<!-- File: ./index.html -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -8,7 +8,12 @@
     <link href="/src/index.css" rel="stylesheet" />
   </head>
   <body>
-    <div id="app"></div>
+    <!-- The static shell of the application will be rendered here -->
+    <div id="app-shell"></div>
+
+    <!-- The error message component will be rendered here, outside the main shell -->
+    <div id="error-container"></div>
+
     <script type="module" src="/src/client.ts"></script>
   </body>
 </html>

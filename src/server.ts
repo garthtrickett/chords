@@ -4,13 +4,13 @@ import { cors } from "@elysiajs/cors";
 import { staticPlugin } from "@elysiajs/static";
 import { nanoid } from "nanoid";
 import { db } from "./db/database";
-import type { InsertablePattern } from "../types/database"; // <-- Import new type
+import type { InsertablePattern } from "../types/app"; // <-- Import new type
 
 const app = new Elysia()
   .use(cors())
-  .use(staticPlugin({ assets: "public", prefix: "" }))
-  .get("/", ({ set }) => {
-    set.redirect = "/index.html";
+  .use(staticPlugin({ assets: "dist", prefix: "" }))
+  .get("/", ({ redirect }) => {
+    return redirect("/index.html");
   })
   .group(
     "/patterns",
@@ -29,26 +29,64 @@ const app = new Elysia()
         .post(
           "/",
           async ({ body, set }) => {
-            // The notes data will come from the client as a stringified JSON
             const newPattern: InsertablePattern = {
               id: nanoid(),
               name: body.name,
-              notes: body.notes, // <-- Store the notes JSON string
+              notes: body.notes,
             };
 
-            const result = await db
-              .insertInto("pattern") // <-- Use 'pattern' table
-              .values(newPattern)
-              .returningAll()
-              .executeTakeFirstOrThrow();
+            try {
+              const result = await db
+                .insertInto("pattern")
+                .values(newPattern)
+                .returningAll()
+                .executeTakeFirstOrThrow();
 
-            set.status = 201;
-            return result;
+              set.status = 201;
+              return result;
+            } catch (e: any) {
+              set.status = 409; // Conflict
+              return { error: "A pattern with this name already exists." };
+            }
           },
           {
             body: t.Object({
               name: t.String(),
-              notes: t.String(), // <-- Expect a string from the client
+              notes: t.String(),
+            }),
+          },
+        )
+        // NEW: Add a PUT route to update an existing pattern
+        .put(
+          "/:id",
+          async ({ params, body, set }) => {
+            try {
+              const result = await db
+                .updateTable("pattern")
+                .set({ name: body.name, notes: body.notes })
+                .where("id", "=", params.id)
+                .returningAll()
+                .executeTakeFirst();
+
+              if (!result) {
+                set.status = 404;
+                return { error: "Pattern not found." };
+              }
+              return result;
+            } catch (e: any) {
+              set.status = 409;
+              return {
+                error: "Another pattern with this name already exists.",
+              };
+            }
+          },
+          {
+            body: t.Object({
+              name: t.String(),
+              notes: t.String(),
+            }),
+            params: t.Object({
+              id: t.String(),
             }),
           },
         ),
