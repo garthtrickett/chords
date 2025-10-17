@@ -6,7 +6,6 @@ import { nanoid } from "nanoid";
 import { Effect, Data } from "effect";
 import { db } from "./db/database";
 import type { InsertablePattern, InsertableChord, InsertableTuning } from "../types/app";
-
 // --- Custom Error Types ---
 
 class DatabaseError extends Data.TaggedError("DatabaseError")<{ cause: unknown }> {
@@ -24,6 +23,12 @@ class PatternNameConflictError extends Data.TaggedError("PatternNameConflictErro
 class ChordNameConflictError extends Data.TaggedError("ChordNameConflictError")<{}> {
   get message() { return "A chord with this name already exists."; }
 }
+
+// NEW: Add error for when a chord is not found
+class ChordNotFoundError extends Data.TaggedError("ChordNotFoundError")<{}> {
+  get message() { return "Chord not found."; }
+}
+
 
 // NEW: Add error types for tunings
 class TuningNameConflictError extends Data.TaggedError("TuningNameConflictError")<{}> {
@@ -60,6 +65,25 @@ const createChord = (newChord: InsertableChord) =>
     catch: (e) => isUniqueConstraintError(e) ? new ChordNameConflictError() : new DatabaseError({ cause: e }),
   });
 
+// NEW: Add updateChord effect
+const updateChord = (id: string, data: { name: string; tab: string; tuning: string }) =>
+  Effect.tryPromise({
+    try: () => db.updateTable("chord").set(data).where("id", "=", id).returningAll().executeTakeFirst(),
+    catch: (e) => isUniqueConstraintError(e) ? new ChordNameConflictError() : new DatabaseError({ cause: e }),
+  }).pipe(
+    Effect.flatMap((result) => result ? Effect.succeed(result) : Effect.fail(new ChordNotFoundError())),
+  );
+
+// NEW: Add deleteChord effect
+const deleteChord = (id: string) =>
+  Effect.tryPromise({
+    try: () => db.deleteFrom("chord").where("id", "=", id).returningAll().executeTakeFirst(),
+    catch: (cause) => new DatabaseError({ cause }),
+  }).pipe(
+    Effect.flatMap((result) => result ? Effect.succeed(result) : Effect.fail(new ChordNotFoundError())),
+  );
+
+
 // NEW: Add database effects for tunings
 const createTuning = (newTuning: InsertableTuning) =>
   Effect.tryPromise({
@@ -82,7 +106,6 @@ const deleteTuning = (id: string) =>
   }).pipe(
     Effect.flatMap((result) => result ? Effect.succeed(result) : Effect.fail(new TuningNotFoundError())),
   );
-
 
 // --- Elysia Server Setup ---
 
@@ -150,6 +173,33 @@ const app = new Elysia()
         );
       }, { body: t.Object({ name: t.String(), tab: t.String(), tuning: t.String() }) }
       )
+      // NEW: Add PUT endpoint for updating a chord
+      .put("/:id", async ({ params, body, set }) => {
+        const program = updateChord(params.id, body);
+        return await Effect.runPromise(Effect.match(program, {
+          onFailure: (error) => {
+            if (error._tag === "ChordNotFoundError") set.status = 404;
+            else if (error._tag === "ChordNameConflictError") set.status = 409;
+            else set.status = 500;
+            return { error: error.message };
+          },
+          onSuccess: (result) => result,
+        }));
+      }, { body: t.Object({ name: t.String(), tab: t.String(), tuning: t.String() }), params: t.Object({ id: t.String() }) })
+      // NEW: Add DELETE endpoint for a chord
+      .delete("/:id", async ({ params, set }) => {
+        const program = deleteChord(params.id);
+        return await Effect.runPromise(Effect.match(program, {
+          onFailure: (error) => {
+            set.status = error._tag === "ChordNotFoundError" ? 404 : 500;
+            return { error: error.message };
+          },
+          onSuccess: () => {
+            set.status = 204;
+            return "";
+          },
+        }));
+      }, { params: t.Object({ id: t.String() }) })
   )
   .group("/tunings", (app) => // NEW: Tuning endpoints
     app
