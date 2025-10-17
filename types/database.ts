@@ -9,6 +9,7 @@ export interface Chord {
   id: string | null;
   name: string;
   tab: string;
+  tuning: Generated<string>;
 }
 
 export interface Pattern {

@@ -33,7 +33,6 @@ class PatternNameConflictError extends Data.TaggedError(
   }
 }
 
-// NEW: Add error type for chord name conflicts
 class ChordNameConflictError extends Data.TaggedError(
   "ChordNameConflictError",
 )<{}> {
@@ -42,18 +41,12 @@ class ChordNameConflictError extends Data.TaggedError(
   }
 }
 
+
 // --- Effectful Database Operations ---
 
-/**
- * Checks if a low-level database error is due to a UNIQUE constraint violation.
- */
 const isUniqueConstraintError = (e: unknown): boolean =>
   e instanceof Error && e.message.includes("UNIQUE constraint failed");
 
-/**
- * An Effect that inserts a new pattern into the database.
- * Fails with `PatternNameConflictError` on name collision.
- */
 const createPattern = (newPattern: InsertablePattern) =>
   Effect.tryPromise({
     try: () =>
@@ -68,11 +61,6 @@ const createPattern = (newPattern: InsertablePattern) =>
         : new DatabaseError({ cause: e }),
   });
 
-/**
- * An Effect that updates an existing pattern.
- * Fails with `PatternNotFoundError` if the ID doesn't exist.
- * Fails with `PatternNameConflictError` on name collision.
- */
 const updatePattern = (id: string, data: { name: string; notes: string }) =>
   Effect.tryPromise({
     try: () =>
@@ -92,7 +80,6 @@ const updatePattern = (id: string, data: { name: string; notes: string }) =>
     ),
   );
 
-// NEW: An Effect that inserts a new chord into the database.
 const createChord = (newChord: InsertableChord) =>
   Effect.tryPromise({
     try: () =>
@@ -107,6 +94,7 @@ const createChord = (newChord: InsertableChord) =>
         : new DatabaseError({ cause: e }),
   });
 
+
 // --- Elysia Server Setup ---
 
 const app = new Elysia()
@@ -118,7 +106,6 @@ const app = new Elysia()
   .group("/patterns", (app) =>
     app
       .get("/", async () => {
-        // Simple reads can often remain as-is for simplicity
         return await db
           .selectFrom("pattern")
           .selectAll()
@@ -134,10 +121,7 @@ const app = new Elysia()
             name: body.name,
             notes: body.notes,
           };
-
           const program = createPattern(newPattern);
-
-          // Run the effect and handle success/failure declaratively
           return await Effect.runPromise(
             Effect.match(program, {
               onFailure: (error) => {
@@ -163,8 +147,6 @@ const app = new Elysia()
         "/:id",
         async ({ params, body, set }) => {
           const program = updatePattern(params.id, body);
-
-          // Run the effect and handle all possible typed errors
           return await Effect.runPromise(
             Effect.match(program, {
               onFailure: (error) => {
@@ -173,7 +155,7 @@ const app = new Elysia()
                 } else if (error._tag === "PatternNameConflictError") {
                   set.status = 409;
                 } else {
-                  set.status = 500; // DatabaseError
+                  set.status = 500;
                 }
                 return { error: error.message };
               },
@@ -194,7 +176,6 @@ const app = new Elysia()
         },
       ),
   )
-  // NEW: Add a new group for chord management
   .group("/chords", (app) =>
     app
       .get("/", async () => {
@@ -211,10 +192,9 @@ const app = new Elysia()
             id: nanoid(),
             name: body.name,
             tab: body.tab,
+            tuning: body.tuning,
           };
-
           const program = createChord(newChord);
-
           return await Effect.runPromise(
             Effect.match(program, {
               onFailure: (error) => {
@@ -233,6 +213,7 @@ const app = new Elysia()
           body: t.Object({
             name: t.String(),
             tab: t.String(),
+            tuning: t.String(),
           }),
         },
       ),

@@ -25,15 +25,12 @@ export type AppEvent =
   | { type: "UPDATE_NEW_PATTERN_NAME"; value: string }
   | { type: "CREATE_PATTERN"; name: string }
   | {
-      type: "UPDATE_SAVED_PATTERN";
-      input: { id: string; name: string; content: string };
-    }
+    type: "UPDATE_SAVED_PATTERN";
+    input: { id: string; name: string; content: string };
+  }
   | { type: "TOGGLE_VIEW" }
-  | { type: "CREATE_CHORD"; input: { name: string; tab: string } }
-  | {
-      type: "done.invoke.fetchInitialData";
-      output: { patterns: SerializablePattern[]; chords: SerializableChord[] };
-    }
+  | { type: "CREATE_CHORD"; input: { name: string; tab: string; tuning: string } }
+  | { type: "done.invoke.fetchInitialData"; output: { patterns: SerializablePattern[], chords: SerializableChord[] } }
   | { type: "error.platform.fetchInitialData"; error: unknown }
   | { type: "done.invoke.updatePattern" }
   | { type: "error.platform.updatePattern"; error: unknown }
@@ -52,9 +49,6 @@ const defaultPattern = JSON.stringify(
   2,
 );
 
-/**
- * ADDED: A helper function to safely extract an error message from an unknown type.
- */
 const getErrorMessage = (error: unknown): string => {
   if (typeof error === "object" && error !== null && "message" in error) {
     return String(error.message);
@@ -64,17 +58,12 @@ const getErrorMessage = (error: unknown): string => {
 
 // 4. MACHINE DEFINITION (with setup)
 export const appMachine = setup({
-  // Define the machine's types for robust inference
   types: {} as {
     context: AppContext;
     events: AppEvent;
   },
-  // Actor logic is defined here for strong typing
   actors: {
-    fetchInitialData: {} as PromiseActorLogic<{
-      patterns: SerializablePattern[];
-      chords: SerializableChord[];
-    }>,
+    fetchInitialData: {} as PromiseActorLogic<{ patterns: SerializablePattern[], chords: SerializableChord[] }>,
     createPattern: {} as PromiseActorLogic<
       SerializablePattern,
       { name: string; notes: string }
@@ -85,15 +74,15 @@ export const appMachine = setup({
     >,
     createChord: {} as PromiseActorLogic<
       SerializableChord,
-      { name: string; tab: string }
+      { name: string; tab: string; tuning: string }
     >,
   },
 }).createMachine({
   id: "polyphonicApp",
   initial: "initializing",
   context: {
-    savedPatterns: [] as SerializablePattern[],
-    savedChords: [] as SerializableChord[],
+    savedPatterns: [],
+    savedChords: [],
     currentPattern: defaultPattern,
     patternName: "",
     selectedPatternId: null,
@@ -115,13 +104,9 @@ export const appMachine = setup({
                 ? event.output.patterns[0].notes
                 : defaultPattern,
             patternName: ({ event }) =>
-              event.output.patterns.length > 0
-                ? event.output.patterns[0].name
-                : "",
+              event.output.patterns.length > 0 ? event.output.patterns[0].name : "",
             selectedPatternId: ({ event }) =>
-              event.output.patterns.length > 0
-                ? event.output.patterns[0].id
-                : null,
+              event.output.patterns.length > 0 ? event.output.patterns[0].id : null,
           }),
         },
         onError: {
@@ -212,8 +197,7 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-                        errorMessage: ({ event }) =>
-                          getErrorMessage(event.error),
+                        errorMessage: ({ event }) => getErrorMessage(event.error),
                       }),
                     },
                   },

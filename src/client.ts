@@ -13,11 +13,7 @@ import {
 import { treaty } from "@elysiajs/eden";
 import type { App } from "./server";
 import { appMachine } from "./machine";
-import type {
-  SerializablePattern,
-  NoteEvent,
-  SerializableChord,
-} from "../types/app";
+import type { SerializablePattern, NoteEvent, SerializableChord } from "../types/app";
 
 // --- DYNAMIC STYLES ---
 const style = document.createElement("style");
@@ -31,12 +27,55 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// --- UTILITIES ---
+
+const TUNINGS = {
+  "Standard": ["E", "A", "D", "G", "B", "e"],
+  "Drop D": ["D", "A", "D", "G", "B", "e"],
+  "Open G": ["D", "G", "D", "G", "B", "D"],
+  "Open D": ["D", "A", "D", "F#", "A", "D"],
+  "DADGAD": ["D", "A", "D", "G", "A", "D"],
+};
+
+const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+const NOTE_MAP: Record<string, number> = {
+  "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5,
+  "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
+};
+
+function calculateNotesFromTab(tab: string, tuningName: string): string[] {
+  const tuning = TUNINGS[tuningName as keyof typeof TUNINGS] || TUNINGS["Standard"];
+  const notes: string[] = [];
+
+  for (let i = 0; i < 6; i++) {
+    const fret = tab[i];
+    if (fret === "x" || fret === "X" || fret === undefined) {
+      notes.push("x");
+      continue;
+    }
+
+    const fretNum = parseInt(fret, 10);
+    if (isNaN(fretNum)) {
+      notes.push("?");
+      continue;
+    }
+
+    const openStringNote = tuning[i].toUpperCase();
+    const openNoteIndex = NOTE_MAP[openStringNote];
+    const finalNoteIndex = (openNoteIndex + fretNum) % 12;
+    notes.push(NOTES[finalNoteIndex]);
+  }
+  return notes;
+}
+
+
 // --- EDEN, EFFECT & XSTATE SETUP ---
 
 class ApiError extends Data.TaggedError("ApiError")<{
   readonly message: string;
   readonly cause?: unknown;
-}> {}
+}> { }
 
 type AppSnapshot = SnapshotFrom<typeof appMachine>;
 const client = treaty<App>("http://localhost:8080");
@@ -45,36 +84,20 @@ const client = treaty<App>("http://localhost:8080");
 const fetchInitialDataEffect = Effect.all([
   Effect.tryPromise({
     try: () => client.patterns.get(),
-    catch: (cause) =>
-      new ApiError({ message: "Failed to fetch patterns.", cause }),
+    catch: (cause) => new ApiError({ message: "Failed to fetch patterns.", cause }),
   }),
   Effect.tryPromise({
     try: () => client.chords.get(),
-    catch: (cause) =>
-      new ApiError({ message: "Failed to fetch chords.", cause }),
+    catch: (cause) => new ApiError({ message: "Failed to fetch chords.", cause }),
   }),
 ]).pipe(
   Effect.flatMap(([patternsResponse, chordsResponse]) => {
-    if (patternsResponse.error)
-      return Effect.fail(
-        new ApiError({
-          message: "API error fetching patterns",
-          cause: patternsResponse.error.value,
-        }),
-      );
-    if (chordsResponse.error)
-      return Effect.fail(
-        new ApiError({
-          message: "API error fetching chords",
-          cause: chordsResponse.error.value,
-        }),
-      );
-    return Effect.succeed({
-      patterns: patternsResponse.data ?? [],
-      chords: chordsResponse.data ?? [],
-    });
-  }),
+    if (patternsResponse.error) return Effect.fail(new ApiError({ message: "API error fetching patterns", cause: patternsResponse.error.value }));
+    if (chordsResponse.error) return Effect.fail(new ApiError({ message: "API error fetching chords", cause: chordsResponse.error.value }));
+    return Effect.succeed({ patterns: patternsResponse.data ?? [], chords: chordsResponse.data ?? [] });
+  })
 );
+
 
 const createPatternEffect = (input: { name: string; notes: string }) =>
   Effect.tryPromise({
@@ -125,34 +148,25 @@ const updatePatternEffect = (input: {
   );
 };
 
-const createChordEffect = (input: { name: string; tab: string }) =>
+const createChordEffect = (input: { name: string; tab: string; tuning: string }) =>
   Effect.tryPromise({
     try: () => client.chords.post(input),
-    catch: (cause) =>
-      new ApiError({
-        message: "Network request failed while creating chord.",
-        cause,
-      }),
+    catch: (cause) => new ApiError({ message: "Network request failed while creating chord.", cause }),
   }).pipe(
     Effect.flatMap(({ data, error }) => {
       if (error) {
-        const message =
-          (error.value as any)?.error ?? "An unknown API error occurred.";
+        const message = (error.value as any)?.error ?? "An unknown API error occurred.";
         return Effect.fail(new ApiError({ message, cause: error.value }));
       }
-      if (!data)
-        return Effect.fail(
-          new ApiError({ message: "API did not return the created chord." }),
-        );
+      if (!data) return Effect.fail(new ApiError({ message: "API did not return the created chord." }));
       return Effect.succeed(data as SerializableChord);
-    }),
+    })
   );
+
 
 const machineWithImplementations = appMachine.provide({
   actors: {
-    fetchInitialData: fromPromise(() =>
-      Effect.runPromise(fetchInitialDataEffect),
-    ),
+    fetchInitialData: fromPromise(() => Effect.runPromise(fetchInitialDataEffect)),
     createPattern: fromPromise(({ input }) =>
       Effect.runPromise(createPatternEffect(input)),
     ),
@@ -160,7 +174,7 @@ const machineWithImplementations = appMachine.provide({
       Effect.runPromise(updatePatternEffect(input)),
     ),
     createChord: fromPromise(({ input }) =>
-      Effect.runPromise(createChordEffect(input)),
+      Effect.runPromise(createChordEffect(input))
     ),
   },
 });
@@ -169,7 +183,7 @@ const appActor = createActor(machineWithImplementations).start();
 // --- TONE.JS SETUP ---
 const synth = new PolySynth(Synth).toDestination();
 const transport = getTransport();
-let part = new Part<NoteEvent & { index: number }>().start(0); // MODIFIED: Part now expects an index
+let part = new Part<NoteEvent & { index: number }>().start(0);
 part.loop = true;
 part.loopEnd = "64m";
 
@@ -211,10 +225,10 @@ const PatternEditor = (currentPattern: string) => html`
     class="${baseInputClasses} min-h-[240px] font-mono text-base resize-y w-full"
     .value=${currentPattern}
     @input=${(e: Event) =>
-      appActor.send({
-        type: "UPDATE_PATTERN",
-        value: (e.target as HTMLTextAreaElement).value,
-      })}
+    appActor.send({
+      type: "UPDATE_PATTERN",
+      value: (e.target as HTMLTextAreaElement).value,
+    })}
     placeholder='[
   { "time": "0:0", "note": "C4", "duration": "8n" },
   { "time": "0:0", "note": "E4", "duration": "8n" }
@@ -241,7 +255,7 @@ const VisualEditor = (currentPattern: string) => {
       class="space-y-2 p-4 border border-zinc-700 rounded-lg bg-zinc-950/50 min-h-[240px]"
     >
       ${notes.map(
-        (note, index) => html`
+    (note, index) => html`
           <div
             id="note-${index}"
             class="flex items-center gap-4 p-2 bg-zinc-800 rounded transition-colors duration-75"
@@ -253,7 +267,7 @@ const VisualEditor = (currentPattern: string) => {
             >
           </div>
         `,
-      )}
+  )}
     </div>
   `;
 };
@@ -269,13 +283,13 @@ const Controls = (props: {
     class="mt-6 flex flex-col sm:flex-row flex-wrap gap-4 items-center justify-center"
   >
     ${!props.isAudioOn
-      ? html`<button
+    ? html`<button
           class=${primaryButtonClasses}
           @click=${() => appActor.send({ type: "START_AUDIO" })}
         >
           Start Audio
         </button>`
-      : html`<button
+    : html`<button
           class=${destructiveButtonClasses}
           @click=${() => appActor.send({ type: "STOP_AUDIO" })}
         >
@@ -288,14 +302,14 @@ const Controls = (props: {
       placeholder="Pattern Name"
       .value=${props.patternName}
       @input=${(e: Event) =>
-        appActor.send({
-          type: "UPDATE_PATTERN_NAME",
-          value: (e.target as HTMLInputElement).value,
-        })}
+    appActor.send({
+      type: "UPDATE_PATTERN_NAME",
+      value: (e.target as HTMLInputElement).value,
+    })}
     />
 
     <button
-      class=${secondaryButtonClasses}
+       class=${secondaryButtonClasses}
       @click=${() => appActor.send({ type: "NEW_PATTERN" })}
     >
       New Pattern
@@ -311,21 +325,21 @@ const Controls = (props: {
     <button
       class=${primaryButtonClasses}
       ?disabled=${!props.patternName.trim() ||
-      props.isSaving ||
-      !props.selectedPatternId}
+  props.isSaving ||
+  !props.selectedPatternId}
       @click=${() => {
-        const latest = appActor.getSnapshot();
-        if (latest.context.selectedPatternId) {
-          appActor.send({
-            type: "UPDATE_SAVED_PATTERN",
-            input: {
-              id: latest.context.selectedPatternId,
-              name: latest.context.patternName,
-              content: latest.context.currentPattern,
-            },
-          });
-        }
-      }}
+    const latest = appActor.getSnapshot();
+    if (latest.context.selectedPatternId) {
+      appActor.send({
+        type: "UPDATE_SAVED_PATTERN",
+        input: {
+          id: latest.context.selectedPatternId,
+          name: latest.context.patternName,
+          content: latest.context.currentPattern,
+        },
+      });
+    }
+  }}
     >
       ${props.isSaving ? "Saving..." : "Save Pattern"}
     </button>
@@ -340,10 +354,10 @@ const PatternLoader = (
     id="load-select"
     class="${baseInputClasses} w-full"
     @change=${(e: Event) =>
-      appActor.send({
-        type: "SELECT_PATTERN",
-        id: (e.target as HTMLSelectElement).value,
-      })}
+    appActor.send({
+      type: "SELECT_PATTERN",
+      id: (e.target as HTMLSelectElement).value,
+    })}
   >
     <option value="" ?selected=${!selectedId}>Select a saved pattern...</option>
     ${savedPatterns.map(
@@ -371,9 +385,9 @@ const NewPatternDialog = (newPatternName: string) => html`
   <div
     class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
     @click=${(e: Event) => {
-      if (e.currentTarget === e.target)
-        appActor.send({ type: "CANCEL_NEW_PATTERN" });
-    }}
+    if (e.currentTarget === e.target)
+      appActor.send({ type: "CANCEL_NEW_PATTERN" });
+  }}
   >
     <div class="${cardClasses} w-full max-w-sm">
       <h3 class="text-lg font-medium mb-4 text-zinc-50">Create New Pattern</h3>
@@ -385,14 +399,14 @@ const NewPatternDialog = (newPatternName: string) => html`
         placeholder="e.g., 'Ambient Arp'"
         .value=${newPatternName}
         @input=${(e: Event) =>
-          appActor.send({
-            type: "UPDATE_NEW_PATTERN_NAME",
-            value: (e.target as HTMLInputElement).value,
-          })}
+    appActor.send({
+      type: "UPDATE_NEW_PATTERN_NAME",
+      value: (e.target as HTMLInputElement).value,
+    })}
         @keydown=${(e: KeyboardEvent) => {
-          if (e.key === "Enter")
-            appActor.send({ type: "CREATE_PATTERN", name: newPatternName });
-        }}
+    if (e.key === "Enter")
+      appActor.send({ type: "CREATE_PATTERN", name: newPatternName });
+  }}
       />
       <div class="mt-6 flex justify-end gap-3">
         <button
@@ -403,9 +417,9 @@ const NewPatternDialog = (newPatternName: string) => html`
         </button>
         <button
           class=${primaryButtonClasses}
-          ?disabled=${!newPatternName.trim()}
+           ?disabled=${!newPatternName.trim()}
           @click=${() =>
-            appActor.send({ type: "CREATE_PATTERN", name: newPatternName })}
+    appActor.send({ type: "CREATE_PATTERN", name: newPatternName })}
         >
           Create
         </button>
@@ -418,54 +432,71 @@ const ChordBank = (savedChords: SerializableChord[]) => html`
   <h3 class="text-lg font-medium mb-4 text-zinc-50">Chord Bank</h3>
   <form
     @submit=${(e: Event) => {
-      e.preventDefault();
-      const formData = new FormData(e.target as HTMLFormElement);
-      const name = formData.get("chord-name") as string;
-      const tab = formData.get("chord-tab") as string;
-      if (name.trim() && tab.trim()) {
-        appActor.send({ type: "CREATE_CHORD", input: { name, tab } });
-        (e.target as HTMLFormElement).reset();
-      }
-    }}
-    class="flex items-end gap-4 mb-6"
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const formData = new FormData(form);
+    const name = formData.get("chord-name") as string;
+    const tuning = formData.get("chord-tuning") as string;
+
+    const tabInputs = Array.from(form.querySelectorAll<HTMLInputElement>('input[name^="fret-"]'));
+    const tab = tabInputs.map(input => input.value || "x").join("");
+
+    if (name.trim() && tab.length === 6) {
+      appActor.send({ type: "CREATE_CHORD", input: { name, tab, tuning } });
+      form.reset();
+    }
+  }}
+    class="space-y-4 mb-6"
   >
-    <div class="flex-grow">
-      <label for="chord-name" class=${labelClasses}>Chord Name</label>
-      <input
-        id="chord-name"
-        name="chord-name"
-        type="text"
-        class=${baseInputClasses}
-        placeholder="e.g., G Major"
-        required
-      />
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="md:col-span-1">
+            <label for="chord-name" class=${labelClasses}>Chord Name</label>
+            <input id="chord-name" name="chord-name" type="text" class=${baseInputClasses} placeholder="e.g., G Major" required />
+        </div>
+        <div class="md:col-span-2">
+            <label for="chord-tuning" class=${labelClasses}>Tuning</label>
+            <select id="chord-tuning" name="chord-tuning" class="${baseInputClasses}">
+                ${Object.keys(TUNINGS).map(name => html`<option .value=${name}>${name}</option>`)}
+            </select>
+        </div>
     </div>
-    <div class="flex-grow">
-      <label for="chord-tab" class=${labelClasses}>Tablature</label>
-      <input
-        id="chord-tab"
-        name="chord-tab"
-        type="text"
-        class="${baseInputClasses} font-mono"
-        placeholder="e.g., 320003"
-        required
-      />
+    <div>
+      <label class=${labelClasses}>Tablature (Strings e B G D A E)</label>
+      <div class="grid grid-cols-6 gap-2">
+        ${[...Array(6)].map((_, i) => html`
+            <input type="text" name="fret-${5 - i}" class="${baseInputClasses} font-mono text-center" maxlength="2" placeholder="x" />
+        `)}
+      </div>
     </div>
-    <button type="submit" class=${primaryButtonClasses}>Add Chord</button>
+    <div class="flex justify-end">
+        <button type="submit" class=${primaryButtonClasses}>Add Chord</button>
+    </div>
   </form>
 
-  <div class="space-y-2">
+  <div class="space-y-3">
     ${savedChords.map(
-      (chord) => html`
-        <div class="flex items-center gap-4 p-2 bg-zinc-800 rounded">
-          <span class="font-semibold text-zinc-300 w-32">${chord.name}</span>
-          <span class="font-mono text-cyan-400">${chord.tab}</span>
-        </div>
-      `,
-    )}
-    ${savedChords.length === 0
-      ? html`<p class="text-zinc-500">No chords saved yet.</p>`
-      : ""}
+    (chord) => {
+      const notes = calculateNotesFromTab(chord.tab, chord.tuning);
+      return html`
+            <div class="p-3 bg-zinc-800 rounded">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="font-semibold text-zinc-300">${chord.name}</span>
+                        <span class="text-sm text-zinc-500 ml-2">(${chord.tuning})</span>
+                    </div>
+                    <div class="font-mono text-cyan-400 flex gap-x-2 text-lg">
+                        ${chord.tab.split('').map(fret => html`<span>${fret}</span>`)}
+                    </div>
+                </div>
+                <div class="font-mono text-amber-400 flex justify-end gap-x-2 text-sm mt-1">
+                    ${notes.map(note => html`
+                        <span class="w-6 text-center">${note}</span>
+                    `)}
+                </div>
+            </div>
+        `}
+  )}
+    ${savedChords.length === 0 ? html`<p class="text-zinc-500 text-center py-4">No chords saved yet.</p>` : ''}
   </div>
 `;
 
@@ -510,9 +541,7 @@ const controlsContainer = document.querySelector<HTMLElement>(
 const loaderContainer =
   document.querySelector<HTMLElement>("#loader-container");
 const modalContainer = document.querySelector<HTMLElement>("#modal-container");
-const chordBankContainer = document.querySelector<HTMLElement>(
-  "#chord-bank-container",
-);
+const chordBankContainer = document.querySelector<HTMLElement>("#chord-bank-container");
 if (
   !editorContainer ||
   !controlsContainer ||
