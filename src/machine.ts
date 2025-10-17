@@ -1,11 +1,12 @@
 // src/machine.ts
 import { setup, assign, type PromiseActorLogic } from "xstate";
-import type { SerializablePattern, SerializableChord } from "../types/app";
+import type { SerializablePattern, SerializableChord, SerializableTuning } from "../types/app";
 
 // 1. CONTEXT (State)
 export interface AppContext {
   savedPatterns: SerializablePattern[];
   savedChords: SerializableChord[];
+  savedTunings: SerializableTuning[];
   currentPattern: string;
   patternName: string;
   selectedPatternId: string | null;
@@ -24,58 +25,48 @@ export type AppEvent =
   | { type: "CANCEL_NEW_PATTERN" }
   | { type: "UPDATE_NEW_PATTERN_NAME"; value: string }
   | { type: "CREATE_PATTERN"; name: string }
-  | {
-    type: "UPDATE_SAVED_PATTERN";
-    input: { id: string; name: string; content: string };
-  }
+  | { type: "UPDATE_SAVED_PATTERN"; input: { id: string; name: string; content: string } }
   | { type: "TOGGLE_VIEW" }
   | { type: "CREATE_CHORD"; input: { name: string; tab: string; tuning: string } }
-  | { type: "done.invoke.fetchInitialData"; output: { patterns: SerializablePattern[], chords: SerializableChord[] } }
+  | { type: "CREATE_TUNING"; input: { name: string; notes: string } }
+  | { type: "UPDATE_TUNING"; input: { id: string; name: string; notes: string } }
+  | { type: "DELETE_TUNING"; id: string }
+  | { type: "done.invoke.fetchInitialData"; output: { patterns: SerializablePattern[], chords: SerializableChord[], tunings: SerializableTuning[] } }
   | { type: "error.platform.fetchInitialData"; error: unknown }
   | { type: "done.invoke.updatePattern" }
   | { type: "error.platform.updatePattern"; error: unknown }
   | { type: "done.invoke.createPattern"; output: SerializablePattern }
   | { type: "error.platform.createPattern"; error: unknown }
   | { type: "done.invoke.createChord"; output: SerializableChord }
-  | { type: "error.platform.createChord"; error: unknown };
+  | { type: "error.platform.createChord"; error: unknown }
+  | { type: "done.invoke.createTuning"; output: SerializableTuning }
+  | { type: "error.platform.createTuning"; error: unknown }
+  | { type: "done.invoke.updateTuning" }
+  | { type: "error.platform.updateTuning"; error: unknown }
+  | { type: "done.invoke.deleteTuning" }
+  | { type: "error.platform.deleteTuning"; error: unknown };
 
 // 3. CONSTANTS
 const defaultPattern = JSON.stringify(
-  [
-    { time: "0:0", note: "C4", duration: "8n" },
-    { time: "0:1", note: "E4", duration: "8n" },
-  ],
-  null,
-  2,
+  [{ time: "0:0", note: "C4", duration: "8n" }, { time: "0:1", note: "E4", duration: "8n" }], null, 2
 );
 
 const getErrorMessage = (error: unknown): string => {
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String(error.message);
-  }
+  if (typeof error === "object" && error !== null && "message" in error) return String(error.message);
   return "An unexpected error occurred.";
 };
 
 // 4. MACHINE DEFINITION (with setup)
 export const appMachine = setup({
-  types: {} as {
-    context: AppContext;
-    events: AppEvent;
-  },
+  types: {} as { context: AppContext; events: AppEvent; },
   actors: {
-    fetchInitialData: {} as PromiseActorLogic<{ patterns: SerializablePattern[], chords: SerializableChord[] }>,
-    createPattern: {} as PromiseActorLogic<
-      SerializablePattern,
-      { name: string; notes: string }
-    >,
-    updatePattern: {} as PromiseActorLogic<
-      void,
-      { id: string; name: string; content: string }
-    >,
-    createChord: {} as PromiseActorLogic<
-      SerializableChord,
-      { name: string; tab: string; tuning: string }
-    >,
+    fetchInitialData: {} as PromiseActorLogic<{ patterns: SerializablePattern[], chords: SerializableChord[], tunings: SerializableTuning[] }>,
+    createPattern: {} as PromiseActorLogic<SerializablePattern, { name: string; notes: string }>,
+    updatePattern: {} as PromiseActorLogic<void, { id: string; name: string; content: string }>,
+    createChord: {} as PromiseActorLogic<SerializableChord, { name: string; tab: string; tuning: string }>,
+    createTuning: {} as PromiseActorLogic<SerializableTuning, { name: string; notes: string }>,
+    updateTuning: {} as PromiseActorLogic<void, { id: string; name: string; notes: string }>,
+    deleteTuning: {} as PromiseActorLogic<void, { id: string }>,
   },
 }).createMachine({
   id: "polyphonicApp",
@@ -83,6 +74,7 @@ export const appMachine = setup({
   context: {
     savedPatterns: [],
     savedChords: [],
+    savedTunings: [],
     currentPattern: defaultPattern,
     patternName: "",
     selectedPatternId: null,
@@ -99,21 +91,15 @@ export const appMachine = setup({
           actions: assign({
             savedPatterns: ({ event }) => event.output.patterns,
             savedChords: ({ event }) => event.output.chords,
-            currentPattern: ({ event }) =>
-              event.output.patterns.length > 0
-                ? event.output.patterns[0].notes
-                : defaultPattern,
-            patternName: ({ event }) =>
-              event.output.patterns.length > 0 ? event.output.patterns[0].name : "",
-            selectedPatternId: ({ event }) =>
-              event.output.patterns.length > 0 ? event.output.patterns[0].id : null,
+            savedTunings: ({ event }) => event.output.tunings,
+            currentPattern: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].notes : defaultPattern,
+            patternName: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].name : "",
+            selectedPatternId: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].id : null,
           }),
         },
         onError: {
           target: "running",
-          actions: assign({
-            errorMessage: ({ event }) => getErrorMessage(event.error),
-          }),
+          actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }),
         },
       },
     },
@@ -138,6 +124,9 @@ export const appMachine = setup({
                     UPDATE_SAVED_PATTERN: "updating",
                     CREATE_PATTERN: "creating",
                     CREATE_CHORD: "creatingChord",
+                    CREATE_TUNING: "creatingTuning",
+                    UPDATE_TUNING: "updatingTuning",
+                    DELETE_TUNING: "deletingTuning",
                   },
                 },
                 updating: {
@@ -202,6 +191,42 @@ export const appMachine = setup({
                     },
                   },
                 },
+                creatingTuning: {
+                  invoke: {
+                    id: "createTuning",
+                    src: "createTuning",
+                    input: ({ event }) => {
+                      if (event.type === "CREATE_TUNING") return event.input;
+                      throw new Error("Invalid event for actor");
+                    },
+                    onDone: "reloading",
+                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                  },
+                },
+                updatingTuning: {
+                  invoke: {
+                    id: "updateTuning",
+                    src: "updateTuning",
+                    input: ({ event }) => {
+                      if (event.type === "UPDATE_TUNING") return event.input;
+                      throw new Error("Invalid event for actor");
+                    },
+                    onDone: "reloading",
+                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                  },
+                },
+                deletingTuning: {
+                  invoke: {
+                    id: "deleteTuning",
+                    src: "deleteTuning",
+                    input: ({ event }) => {
+                      if (event.type === "DELETE_TUNING") return { id: event.id };
+                      throw new Error("Invalid event for actor");
+                    },
+                    onDone: "reloading",
+                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                  },
+                },
                 reloading: {
                   invoke: {
                     id: "reloadInitialData",
@@ -211,31 +236,18 @@ export const appMachine = setup({
                       actions: assign({
                         savedPatterns: ({ event }) => event.output.patterns,
                         savedChords: ({ event }) => event.output.chords,
+                        savedTunings: ({ event }) => event.output.tunings,
                         errorMessage: null,
                       }),
                     },
-                    onError: {
-                      target: "idle",
-                      actions: assign({
-                        errorMessage: ({ event }) =>
-                          getErrorMessage(event.error),
-                      }),
-                    },
+                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
                   },
                 },
               },
             },
-            viewMode: {
-              initial: "json",
-              states: {
-                json: { on: { TOGGLE_VIEW: "visual" } },
-                visual: { on: { TOGGLE_VIEW: "json" } },
-              },
-            },
+            viewMode: { initial: "json", states: { json: { on: { TOGGLE_VIEW: "visual" } }, visual: { on: { TOGGLE_VIEW: "json" } } } },
           },
-          on: {
-            NEW_PATTERN: "showingNewPatternDialog",
-          },
+          on: { NEW_PATTERN: "showingNewPatternDialog" },
         },
         showingNewPatternDialog: {
           on: {

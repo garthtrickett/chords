@@ -21,7 +21,15 @@ export interface Pattern {
   updated_at: Generated<string>;
 }
 
+export interface Tuning {
+  created_at: Generated<string>;
+  id: string | null;
+  name: string;
+  notes: string;
+}
+
 export interface DB {
   chord: Chord;
   pattern: Pattern;
+  tuning: Tuning;
 }
