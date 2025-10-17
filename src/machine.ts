@@ -1,6 +1,10 @@
 // src/machine.ts
 import { setup, assign, type PromiseActorLogic } from "xstate";
-import type { SerializablePattern, SerializableChord, SerializableTuning } from "../types/app";
+import type {
+  SerializablePattern,
+  SerializableChord,
+  SerializableTuning,
+} from "../types/app";
 
 // 1. CONTEXT (State)
 export interface AppContext {
@@ -28,6 +32,7 @@ export type AppEvent =
   | { type: "UPDATE_NEW_PATTERN_NAME"; value: string }
   | { type: "CREATE_PATTERN"; name: string }
   | { type: "UPDATE_SAVED_PATTERN"; input: { id: string; name: string; content: string } }
+  | { type: "DELETE_PATTERN"; id: string }
   | { type: "TOGGLE_VIEW" }
   | { type: "CREATE_CHORD"; input: { name: string; tab: string; tuning: string } }
   | { type: "EDIT_CHORD"; id: string }
@@ -46,6 +51,8 @@ export type AppEvent =
   | { type: "error.platform.updatePattern"; error: unknown }
   | { type: "done.invoke.createPattern"; output: SerializablePattern }
   | { type: "error.platform.createPattern"; error: unknown }
+  | { type: "done.invoke.deletePattern" }
+  | { type: "error.platform.deletePattern"; error: unknown }
   | { type: "done.invoke.createChord"; output: SerializableChord }
   | { type: "error.platform.createChord"; error: unknown }
   | { type: "done.invoke.updateChord" }
@@ -71,11 +78,12 @@ const getErrorMessage = (error: unknown): string => {
 
 // 4. MACHINE DEFINITION (with setup)
 export const appMachine = setup({
-  types: {} as { context: AppContext; events: AppEvent; },
+  types: {} as { context: AppContext; events: AppEvent },
   actors: {
     fetchInitialData: {} as PromiseActorLogic<{ patterns: SerializablePattern[], chords: SerializableChord[], tunings: SerializableTuning[] }>,
     createPattern: {} as PromiseActorLogic<SerializablePattern, { name: string; notes: string }>,
     updatePattern: {} as PromiseActorLogic<void, { id: string; name: string; content: string }>,
+    deletePattern: {} as PromiseActorLogic<void, { id: string }>,
     createChord: {} as PromiseActorLogic<SerializableChord, { name: string; tab: string; tuning: string }>,
     updateChord: {} as PromiseActorLogic<void, { id: string; name: string; tab: string; tuning: string }>,
     deleteChord: {} as PromiseActorLogic<void, { id: string }>,
@@ -140,6 +148,7 @@ export const appMachine = setup({
                   on: {
                     UPDATE_SAVED_PATTERN: "updating",
                     CREATE_PATTERN: "creating",
+                    DELETE_PATTERN: "deletingPattern",
                     CREATE_CHORD: "creatingChord",
                     UPDATE_CHORD: "updatingChord",
                     DELETE_CHORD: "deletingChord",
@@ -190,6 +199,21 @@ export const appMachine = setup({
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
+                    },
+                  },
+                },
+                deletingPattern: {
+                  invoke: {
+                    id: "deletePattern",
+                    src: "deletePattern",
+                    input: ({ event }) => {
+                      if (event.type === "DELETE_PATTERN") return { id: event.id };
+                      throw new Error("Invalid event for actor");
+                    },
+                    onDone: "reloadingAndResetting",
+                    onError: {
+                      target: "idle",
+                      actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }),
                     },
                   },
                 },
@@ -289,6 +313,27 @@ export const appMachine = setup({
                         errorMessage: null,
                         editingChordId: null,
                         editingTuningId: null, // NEW: Reset editing state on reload
+                      }),
+                    },
+                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                  },
+                },
+                reloadingAndResetting: {
+                  invoke: {
+                    id: "reloadInitialDataAfterDelete",
+                    src: "fetchInitialData",
+                    onDone: {
+                      target: "idle",
+                      actions: assign({
+                        savedPatterns: ({ event }) => event.output.patterns,
+                        savedChords: ({ event }) => event.output.chords,
+                        savedTunings: ({ event }) => event.output.tunings,
+                        errorMessage: null,
+                        editingChordId: null,
+                        editingTuningId: null,
+                        currentPattern: defaultPattern,
+                        patternName: "",
+                        selectedPatternId: null,
                       }),
                     },
                     onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
