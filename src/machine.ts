@@ -27,7 +27,9 @@ export type AppEvent =
       type: "UPDATE_SAVED_PATTERN";
       input: { id: string; name: string; content: string };
     }
+  | { type: "TOGGLE_VIEW" }
   | { type: "done.invoke.fetchPatterns"; output: SerializablePattern[] }
+  // MODIFIED: The error type from invoked promises is 'unknown'
   | { type: "error.platform.fetchPatterns"; error: unknown }
   | { type: "done.invoke.updatePattern" }
   | { type: "error.platform.updatePattern"; error: unknown }
@@ -43,6 +45,16 @@ const defaultPattern = JSON.stringify(
   null,
   2,
 );
+
+/**
+ * ADDED: A helper function to safely extract an error message from an unknown type.
+ */
+const getErrorMessage = (error: unknown): string => {
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String(error.message);
+  }
+  return "An unexpected error occurred.";
+};
 
 // 4. MACHINE DEFINITION (with setup)
 export const appMachine = setup({
@@ -93,8 +105,9 @@ export const appMachine = setup({
         },
         onError: {
           target: "running",
+          // MODIFIED: Use the safe helper function
           actions: assign({
-            errorMessage: ({ event }) => (event.error as Error).message,
+            errorMessage: ({ event }) => getErrorMessage(event.error),
           }),
         },
       },
@@ -133,9 +146,10 @@ export const appMachine = setup({
                     onDone: "reloading",
                     onError: {
                       target: "idle",
+                      // MODIFIED: Use the safe helper function
                       actions: assign({
                         errorMessage: ({ event }) =>
-                          (event.error as Error).message,
+                          getErrorMessage(event.error),
                       }),
                     },
                   },
@@ -159,9 +173,10 @@ export const appMachine = setup({
                     },
                     onError: {
                       target: "idle",
+                      // MODIFIED: Use the safe helper function
                       actions: assign({
                         errorMessage: ({ event }) =>
-                          (event.error as Error).message,
+                          getErrorMessage(event.error),
                       }),
                     },
                   },
@@ -179,13 +194,21 @@ export const appMachine = setup({
                     },
                     onError: {
                       target: "idle",
+                      // MODIFIED: Use the safe helper function
                       actions: assign({
                         errorMessage: ({ event }) =>
-                          (event.error as Error).message,
+                          getErrorMessage(event.error),
                       }),
                     },
                   },
                 },
+              },
+            },
+            viewMode: {
+              initial: "json",
+              states: {
+                json: { on: { TOGGLE_VIEW: "visual" } },
+                visual: { on: { TOGGLE_VIEW: "json" } },
               },
             },
           },

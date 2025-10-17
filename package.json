@@ -23,6 +23,7 @@
     "@tailwindcss/postcss": "^4.1.14",
     "@tailwindcss/vite": "^4.1.14",
     "autoprefixer": "^10.4.21",
+    "effect": "^3.18.4",
     "elysia": "^1.0.22",
     "kysely": "^0.28.8",
     "kysely-bun-sqlite": "^0.4.0",

@@ -2,6 +2,7 @@
 import "./index.css";
 import { html, render } from "lit-html";
 import { createActor, fromPromise, type SnapshotFrom } from "xstate";
+import { Effect, Data } from "effect";
 import {
   getTransport,
   Synth,
@@ -14,41 +15,104 @@ import type { App } from "./server";
 import { appMachine } from "./machine";
 import type { SerializablePattern, NoteEvent } from "../types/app";
 
-// --- EDEN & XSTATE SETUP ---
+// --- DYNAMIC STYLES ---
+// Inject the highlight style directly into the document head.
+const style = document.createElement("style");
+style.textContent = `
+  .highlight {
+    background-color: rgba(20, 184, 166, 0.3); /* Corresponds to Tailwind's bg-teal-400/30 */
+    border-color: rgb(20 184 166); /* Corresponds to Tailwind's border-teal-400 */
+  }
+`;
+document.head.appendChild(style);
+
+// --- EDEN, EFFECT & XSTATE SETUP ---
+
+class ApiError extends Data.TaggedError("ApiError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 type AppSnapshot = SnapshotFrom<typeof appMachine>;
 const client = treaty<App>("http://localhost:8080");
 
+// --- Effect-based API Call Descriptions ---
+
+const fetchPatternsEffect = Effect.tryPromise({
+  try: () => client.patterns.get(),
+  catch: (cause) =>
+    new ApiError({
+      message: "Network request failed while fetching patterns.",
+      cause,
+    }),
+}).pipe(
+  Effect.flatMap(({ data, error }) => {
+    if (error) {
+      const message =
+        (error.value as any)?.error ?? "An unknown API error occurred.";
+      return Effect.fail(new ApiError({ message, cause: error.value }));
+    }
+    return Effect.succeed(data ?? []);
+  }),
+);
+
+const createPatternEffect = (input: { name: string; notes: string }) =>
+  Effect.tryPromise({
+    try: () => client.patterns.post(input),
+    catch: (cause) =>
+      new ApiError({
+        message: "Network request failed while creating pattern.",
+        cause,
+      }),
+  }).pipe(
+    Effect.flatMap(({ data, error }) => {
+      if (error) {
+        const message =
+          (error.value as any)?.error ?? "An unknown API error occurred.";
+        return Effect.fail(new ApiError({ message, cause: error.value }));
+      }
+      if (!data) {
+        return Effect.fail(
+          new ApiError({ message: "API did not return the created pattern." }),
+        );
+      }
+      return Effect.succeed(data as SerializablePattern);
+    }),
+  );
+
+const updatePatternEffect = (input: {
+  id: string;
+  name: string;
+  content: string;
+}) => {
+  const { id, name, content } = input;
+  return Effect.tryPromise({
+    try: () => client.patterns({ id }).put({ name, notes: content }),
+    catch: (cause) =>
+      new ApiError({
+        message: "Network request failed while updating pattern.",
+        cause,
+      }),
+  }).pipe(
+    Effect.flatMap(({ error }) => {
+      if (error) {
+        const message =
+          (error.value as any)?.error ?? "An unknown API error occurred.";
+        return Effect.fail(new ApiError({ message, cause: error.value }));
+      }
+      return Effect.succeed(undefined as void);
+    }),
+  );
+};
+
 const machineWithImplementations = appMachine.provide({
   actors: {
-    fetchPatterns: fromPromise(async () => {
-      const { data, error } = await client.patterns.get();
-      if (error) throw new Error(JSON.stringify(error.value));
-      return data || [];
-    }),
-    // NEW: Actor for creating a new pattern
-    createPattern: fromPromise(
-      async ({ input }: { input: { name: string; notes: string } }) => {
-        const { data, error } = await client.patterns.post(input);
-        if (error) throw new Error(JSON.stringify(error.value));
-        if (!data) throw new Error("API did not return created pattern.");
-        return data as SerializablePattern;
-      },
+    fetchPatterns: fromPromise(() => Effect.runPromise(fetchPatternsEffect)),
+    createPattern: fromPromise(({ input }) =>
+      Effect.runPromise(createPatternEffect(input)),
     ),
-    // NEW: Actor for updating an existing pattern
-    updatePattern: fromPromise(
-      async ({
-        input,
-      }: {
-        input: { id: string; name: string; content: string };
-      }) => {
-        const { id, name, content } = input;
-        const { error } = await client.patterns({ id: id }).put({
-          name,
-          notes: content,
-        });
-        if (error) throw new Error(JSON.stringify(error.value));
-      },
+    updatePattern: fromPromise(({ input }) =>
+      Effect.runPromise(updatePatternEffect(input)),
     ),
   },
 });
@@ -58,23 +122,27 @@ const appActor = createActor(machineWithImplementations).start();
 // --- TONE.JS SETUP ---
 const synth = new PolySynth(Synth).toDestination();
 const transport = getTransport();
-let part = new Part<NoteEvent>().start(0);
+let part = new Part<NoteEvent & { index: number }>().start(0); // MODIFIED: Part now expects an index
 part.loop = true;
 part.loopEnd = "64m";
 
 // --- XSTATE SELECTORS ---
 const selectIsAudioOn = (s: AppSnapshot) =>
-  s.matches({ running: { editing: { audio: "on" } } }); // Path updated
+  s.matches({ running: { editing: { audio: "on" } } });
 const selectIsSaving = (s: AppSnapshot) =>
-  !s.matches({ running: { editing: { saveStatus: "idle" } } }); // Logic updated
+  !s.matches({ running: { editing: { saveStatus: "idle" } } });
 const selectCurrentPattern = (s: AppSnapshot) => s.context.currentPattern;
 const selectPatternName = (s: AppSnapshot) => s.context.patternName;
 const selectSavedPatterns = (s: AppSnapshot) => s.context.savedPatterns;
 const selectErrorMessage = (s: AppSnapshot) => s.context.errorMessage;
-const selectSelectedPatternId = (s: AppSnapshot) => s.context.selectedPatternId; // New selector
+const selectSelectedPatternId = (s: AppSnapshot) => s.context.selectedPatternId;
 const selectIsShowDialog = (s: AppSnapshot) =>
-  s.matches({ running: "showingNewPatternDialog" }); // New selector
-const selectNewPatternName = (s: AppSnapshot) => s.context.newPatternName; // New selector
+  s.matches({ running: "showingNewPatternDialog" });
+const selectNewPatternName = (s: AppSnapshot) => s.context.newPatternName;
+const selectViewMode = (s: AppSnapshot) =>
+  s.matches({ running: { editing: { viewMode: "visual" } } })
+    ? "visual"
+    : "json";
 
 // --- TAILWIND CSS CLASSES (Shared) ---
 const cardClasses =
@@ -107,11 +175,49 @@ const PatternEditor = (currentPattern: string) => html`
   ></textarea>
 `;
 
+const VisualEditor = (currentPattern: string) => {
+  let notes: NoteEvent[] = [];
+  try {
+    const parsed = JSON.parse(currentPattern);
+    if (Array.isArray(parsed)) {
+      notes = parsed;
+    }
+  } catch (e) {
+    return html`<div
+      class="min-h-[240px] p-4 text-red-400 border border-red-500/50 rounded-md"
+    >
+      Invalid JSON format. Switch to JSON view to fix.
+    </div>`;
+  }
+
+  return html`
+    <div
+      class="space-y-2 p-4 border border-zinc-700 rounded-lg bg-zinc-950/50 min-h-[240px]"
+    >
+      ${notes.map(
+        (note, index) => html`
+          <div
+            id="note-${index}"
+            class="flex items-center gap-4 p-2 bg-zinc-800 rounded transition-colors duration-75"
+          >
+            <span class="font-mono text-cyan-400 w-20">Time: ${note.time}</span>
+            <span class="font-mono text-pink-400 w-20">Note: ${note.note}</span>
+            <span class="font-mono text-amber-400 w-24"
+              >Dur: ${note.duration}</span
+            >
+          </div>
+        `,
+      )}
+    </div>
+  `;
+};
+
 const Controls = (props: {
   isAudioOn: boolean;
   isSaving: boolean;
   patternName: string;
   selectedPatternId: string | null;
+  viewMode: "json" | "visual";
 }) => html`
   <div
     class="mt-6 flex flex-col sm:flex-row flex-wrap gap-4 items-center justify-center"
@@ -147,6 +253,13 @@ const Controls = (props: {
       @click=${() => appActor.send({ type: "NEW_PATTERN" })}
     >
       New Pattern
+    </button>
+
+    <button
+      class=${secondaryButtonClasses}
+      @click=${() => appActor.send({ type: "TOGGLE_VIEW" })}
+    >
+      ${props.viewMode === "json" ? "Visual View" : "JSON View"}
     </button>
 
     <button
@@ -210,7 +323,6 @@ const ErrorMessage = (errorMessage: string | null) => {
   `;
 };
 
-// NEW: A modal dialog for creating a new pattern
 const NewPatternDialog = (newPatternName: string) => html`
   <div
     class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
@@ -287,10 +399,8 @@ const errorContainer = document.querySelector<HTMLElement>("#error-container");
 if (!appShellContainer || !errorContainer)
   throw new Error("Could not find root containers");
 
-// Render the static parts of the UI once
 render(AppShell(), appShellContainer);
 
-// Get containers for the dynamic parts
 const editorContainer =
   document.querySelector<HTMLElement>("#editor-container");
 const controlsContainer = document.querySelector<HTMLElement>(
@@ -307,15 +417,23 @@ if (
 )
   throw new Error("Could not find component containers");
 
-// REFACTORED: Use a single, efficient subscription to render all dynamic UI
 appActor.subscribe((snapshot) => {
-  render(PatternEditor(selectCurrentPattern(snapshot)), editorContainer);
+  const viewMode = selectViewMode(snapshot);
+
+  render(
+    viewMode === "json"
+      ? PatternEditor(selectCurrentPattern(snapshot))
+      : VisualEditor(selectCurrentPattern(snapshot)),
+    editorContainer,
+  );
+
   render(
     Controls({
       isAudioOn: selectIsAudioOn(snapshot),
       isSaving: selectIsSaving(snapshot),
       patternName: selectPatternName(snapshot),
       selectedPatternId: selectSelectedPatternId(snapshot),
+      viewMode: viewMode,
     }),
     controlsContainer,
   );
@@ -347,21 +465,20 @@ function parseCode(code: string): NoteEvent[] {
 
 function updatePart(notes: NoteEvent[]) {
   part.clear();
-  notes.forEach((noteEvent) => {
+  const indexedNotes = notes.map((note, index) => ({ ...note, index }));
+  indexedNotes.forEach((noteEvent) => {
     part.add(noteEvent);
   });
 }
 
 let lastScheduledPattern = "";
 appActor.subscribe((snapshot) => {
-  // Handle audio transport start/stop
   if (selectIsAudioOn(snapshot)) {
     if (transport.state !== "started")
       startAudio().then(() => transport.start());
   } else {
     if (transport.state !== "stopped") transport.stop();
   }
-  // Update the musical part if the pattern text has changed
   const currentPatternString = selectCurrentPattern(snapshot);
   if (currentPatternString !== lastScheduledPattern) {
     const newNotes = parseCode(currentPatternString);
@@ -370,6 +487,16 @@ appActor.subscribe((snapshot) => {
   }
 });
 
-part = new Part<NoteEvent>((time, value) => {
+part = new Part<NoteEvent & { index: number }>((time, value) => {
   synth.triggerAttackRelease(value.note, value.duration, time);
-}, parseCode(appActor.getSnapshot().context.currentPattern)).start(0);
+
+  const el = document.getElementById(`note-${value.index}`);
+  if (el) {
+    el.classList.add("highlight");
+    setTimeout(() => {
+      el.classList.remove("highlight");
+    }, 150);
+  }
+}, []).start(0);
+
+updatePart(parseCode(appActor.getSnapshot().context.currentPattern));
