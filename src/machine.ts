@@ -1,10 +1,11 @@
 // src/machine.ts
 import { setup, assign, type PromiseActorLogic } from "xstate";
-import type { SerializablePattern } from "../types/app";
+import type { SerializablePattern, SerializableChord } from "../types/app";
 
 // 1. CONTEXT (State)
 export interface AppContext {
   savedPatterns: SerializablePattern[];
+  savedChords: SerializableChord[];
   currentPattern: string;
   patternName: string;
   selectedPatternId: string | null;
@@ -28,13 +29,18 @@ export type AppEvent =
       input: { id: string; name: string; content: string };
     }
   | { type: "TOGGLE_VIEW" }
-  | { type: "done.invoke.fetchPatterns"; output: SerializablePattern[] }
-  // MODIFIED: The error type from invoked promises is 'unknown'
-  | { type: "error.platform.fetchPatterns"; error: unknown }
+  | { type: "CREATE_CHORD"; input: { name: string; tab: string } }
+  | {
+      type: "done.invoke.fetchInitialData";
+      output: { patterns: SerializablePattern[]; chords: SerializableChord[] };
+    }
+  | { type: "error.platform.fetchInitialData"; error: unknown }
   | { type: "done.invoke.updatePattern" }
   | { type: "error.platform.updatePattern"; error: unknown }
   | { type: "done.invoke.createPattern"; output: SerializablePattern }
-  | { type: "error.platform.createPattern"; error: unknown };
+  | { type: "error.platform.createPattern"; error: unknown }
+  | { type: "done.invoke.createChord"; output: SerializableChord }
+  | { type: "error.platform.createChord"; error: unknown };
 
 // 3. CONSTANTS
 const defaultPattern = JSON.stringify(
@@ -65,7 +71,10 @@ export const appMachine = setup({
   },
   // Actor logic is defined here for strong typing
   actors: {
-    fetchPatterns: {} as PromiseActorLogic<SerializablePattern[]>,
+    fetchInitialData: {} as PromiseActorLogic<{
+      patterns: SerializablePattern[];
+      chords: SerializableChord[];
+    }>,
     createPattern: {} as PromiseActorLogic<
       SerializablePattern,
       { name: string; notes: string }
@@ -74,12 +83,17 @@ export const appMachine = setup({
       void,
       { id: string; name: string; content: string }
     >,
+    createChord: {} as PromiseActorLogic<
+      SerializableChord,
+      { name: string; tab: string }
+    >,
   },
 }).createMachine({
   id: "polyphonicApp",
   initial: "initializing",
   context: {
     savedPatterns: [] as SerializablePattern[],
+    savedChords: [] as SerializableChord[],
     currentPattern: defaultPattern,
     patternName: "",
     selectedPatternId: null,
@@ -89,23 +103,29 @@ export const appMachine = setup({
   states: {
     initializing: {
       invoke: {
-        id: "fetchPatterns",
-        src: "fetchPatterns",
+        id: "fetchInitialData",
+        src: "fetchInitialData",
         onDone: {
           target: "running",
           actions: assign({
-            savedPatterns: ({ event }) => event.output,
+            savedPatterns: ({ event }) => event.output.patterns,
+            savedChords: ({ event }) => event.output.chords,
             currentPattern: ({ event }) =>
-              event.output.length > 0 ? event.output[0].notes : defaultPattern,
+              event.output.patterns.length > 0
+                ? event.output.patterns[0].notes
+                : defaultPattern,
             patternName: ({ event }) =>
-              event.output.length > 0 ? event.output[0].name : "",
+              event.output.patterns.length > 0
+                ? event.output.patterns[0].name
+                : "",
             selectedPatternId: ({ event }) =>
-              event.output.length > 0 ? event.output[0].id : null,
+              event.output.patterns.length > 0
+                ? event.output.patterns[0].id
+                : null,
           }),
         },
         onError: {
           target: "running",
-          // MODIFIED: Use the safe helper function
           actions: assign({
             errorMessage: ({ event }) => getErrorMessage(event.error),
           }),
@@ -132,6 +152,7 @@ export const appMachine = setup({
                   on: {
                     UPDATE_SAVED_PATTERN: "updating",
                     CREATE_PATTERN: "creating",
+                    CREATE_CHORD: "creatingChord",
                   },
                 },
                 updating: {
@@ -146,7 +167,6 @@ export const appMachine = setup({
                     onDone: "reloading",
                     onError: {
                       target: "idle",
-                      // MODIFIED: Use the safe helper function
                       actions: assign({
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
@@ -173,7 +193,24 @@ export const appMachine = setup({
                     },
                     onError: {
                       target: "idle",
-                      // MODIFIED: Use the safe helper function
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
+                    },
+                  },
+                },
+                creatingChord: {
+                  invoke: {
+                    id: "createChord",
+                    src: "createChord",
+                    input: ({ event }) => {
+                      if (event.type === "CREATE_CHORD") return event.input;
+                      throw new Error("Invalid event for actor");
+                    },
+                    onDone: "reloading",
+                    onError: {
+                      target: "idle",
                       actions: assign({
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
@@ -183,18 +220,18 @@ export const appMachine = setup({
                 },
                 reloading: {
                   invoke: {
-                    id: "reloadPatterns",
-                    src: "fetchPatterns",
+                    id: "reloadInitialData",
+                    src: "fetchInitialData",
                     onDone: {
                       target: "idle",
                       actions: assign({
-                        savedPatterns: ({ event }) => event.output,
+                        savedPatterns: ({ event }) => event.output.patterns,
+                        savedChords: ({ event }) => event.output.chords,
                         errorMessage: null,
                       }),
                     },
                     onError: {
                       target: "idle",
-                      // MODIFIED: Use the safe helper function
                       actions: assign({
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),

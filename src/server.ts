@@ -5,7 +5,7 @@ import { staticPlugin } from "@elysiajs/static";
 import { nanoid } from "nanoid";
 import { Effect, Data } from "effect";
 import { db } from "./db/database";
-import type { InsertablePattern } from "../types/app";
+import type { InsertablePattern, InsertableChord } from "../types/app";
 
 // --- Custom Error Types ---
 
@@ -30,6 +30,15 @@ class PatternNameConflictError extends Data.TaggedError(
 )<{}> {
   get message() {
     return "A pattern with this name already exists.";
+  }
+}
+
+// NEW: Add error type for chord name conflicts
+class ChordNameConflictError extends Data.TaggedError(
+  "ChordNameConflictError",
+)<{}> {
+  get message() {
+    return "A chord with this name already exists.";
   }
 }
 
@@ -82,6 +91,21 @@ const updatePattern = (id: string, data: { name: string; notes: string }) =>
       result ? Effect.succeed(result) : Effect.fail(new PatternNotFoundError()),
     ),
   );
+
+// NEW: An Effect that inserts a new chord into the database.
+const createChord = (newChord: InsertableChord) =>
+  Effect.tryPromise({
+    try: () =>
+      db
+        .insertInto("chord")
+        .values(newChord)
+        .returningAll()
+        .executeTakeFirstOrThrow(),
+    catch: (e) =>
+      isUniqueConstraintError(e)
+        ? new ChordNameConflictError()
+        : new DatabaseError({ cause: e }),
+  });
 
 // --- Elysia Server Setup ---
 
@@ -166,6 +190,49 @@ const app = new Elysia()
           }),
           params: t.Object({
             id: t.String(),
+          }),
+        },
+      ),
+  )
+  // NEW: Add a new group for chord management
+  .group("/chords", (app) =>
+    app
+      .get("/", async () => {
+        return await db
+          .selectFrom("chord")
+          .selectAll()
+          .orderBy("created_at", "desc")
+          .execute();
+      })
+      .post(
+        "/",
+        async ({ body, set }) => {
+          const newChord: InsertableChord = {
+            id: nanoid(),
+            name: body.name,
+            tab: body.tab,
+          };
+
+          const program = createChord(newChord);
+
+          return await Effect.runPromise(
+            Effect.match(program, {
+              onFailure: (error) => {
+                set.status =
+                  error._tag === "ChordNameConflictError" ? 409 : 500;
+                return { error: error.message };
+              },
+              onSuccess: (result) => {
+                set.status = 201;
+                return result;
+              },
+            }),
+          );
+        },
+        {
+          body: t.Object({
+            name: t.String(),
+            tab: t.String(),
           }),
         },
       ),

@@ -13,15 +13,20 @@ import {
 import { treaty } from "@elysiajs/eden";
 import type { App } from "./server";
 import { appMachine } from "./machine";
-import type { SerializablePattern, NoteEvent } from "../types/app";
+import type {
+  SerializablePattern,
+  NoteEvent,
+  SerializableChord,
+} from "../types/app";
 
 // --- DYNAMIC STYLES ---
-// Inject the highlight style directly into the document head.
 const style = document.createElement("style");
 style.textContent = `
   .highlight {
-    background-color: rgba(20, 184, 166, 0.3); /* Corresponds to Tailwind's bg-teal-400/30 */
-    border-color: rgb(20 184 166); /* Corresponds to Tailwind's border-teal-400 */
+    background-color: rgba(20, 184, 166, 0.3);
+    /* Corresponds to Tailwind's bg-teal-400/30 */
+    border-color: rgb(20 184 166);
+    /* Corresponds to Tailwind's border-teal-400 */
   }
 `;
 document.head.appendChild(style);
@@ -35,24 +40,39 @@ class ApiError extends Data.TaggedError("ApiError")<{
 
 type AppSnapshot = SnapshotFrom<typeof appMachine>;
 const client = treaty<App>("http://localhost:8080");
-
 // --- Effect-based API Call Descriptions ---
 
-const fetchPatternsEffect = Effect.tryPromise({
-  try: () => client.patterns.get(),
-  catch: (cause) =>
-    new ApiError({
-      message: "Network request failed while fetching patterns.",
-      cause,
-    }),
-}).pipe(
-  Effect.flatMap(({ data, error }) => {
-    if (error) {
-      const message =
-        (error.value as any)?.error ?? "An unknown API error occurred.";
-      return Effect.fail(new ApiError({ message, cause: error.value }));
-    }
-    return Effect.succeed(data ?? []);
+const fetchInitialDataEffect = Effect.all([
+  Effect.tryPromise({
+    try: () => client.patterns.get(),
+    catch: (cause) =>
+      new ApiError({ message: "Failed to fetch patterns.", cause }),
+  }),
+  Effect.tryPromise({
+    try: () => client.chords.get(),
+    catch: (cause) =>
+      new ApiError({ message: "Failed to fetch chords.", cause }),
+  }),
+]).pipe(
+  Effect.flatMap(([patternsResponse, chordsResponse]) => {
+    if (patternsResponse.error)
+      return Effect.fail(
+        new ApiError({
+          message: "API error fetching patterns",
+          cause: patternsResponse.error.value,
+        }),
+      );
+    if (chordsResponse.error)
+      return Effect.fail(
+        new ApiError({
+          message: "API error fetching chords",
+          cause: chordsResponse.error.value,
+        }),
+      );
+    return Effect.succeed({
+      patterns: patternsResponse.data ?? [],
+      chords: chordsResponse.data ?? [],
+    });
   }),
 );
 
@@ -105,18 +125,45 @@ const updatePatternEffect = (input: {
   );
 };
 
+const createChordEffect = (input: { name: string; tab: string }) =>
+  Effect.tryPromise({
+    try: () => client.chords.post(input),
+    catch: (cause) =>
+      new ApiError({
+        message: "Network request failed while creating chord.",
+        cause,
+      }),
+  }).pipe(
+    Effect.flatMap(({ data, error }) => {
+      if (error) {
+        const message =
+          (error.value as any)?.error ?? "An unknown API error occurred.";
+        return Effect.fail(new ApiError({ message, cause: error.value }));
+      }
+      if (!data)
+        return Effect.fail(
+          new ApiError({ message: "API did not return the created chord." }),
+        );
+      return Effect.succeed(data as SerializableChord);
+    }),
+  );
+
 const machineWithImplementations = appMachine.provide({
   actors: {
-    fetchPatterns: fromPromise(() => Effect.runPromise(fetchPatternsEffect)),
+    fetchInitialData: fromPromise(() =>
+      Effect.runPromise(fetchInitialDataEffect),
+    ),
     createPattern: fromPromise(({ input }) =>
       Effect.runPromise(createPatternEffect(input)),
     ),
     updatePattern: fromPromise(({ input }) =>
       Effect.runPromise(updatePatternEffect(input)),
     ),
+    createChord: fromPromise(({ input }) =>
+      Effect.runPromise(createChordEffect(input)),
+    ),
   },
 });
-
 const appActor = createActor(machineWithImplementations).start();
 
 // --- TONE.JS SETUP ---
@@ -134,6 +181,7 @@ const selectIsSaving = (s: AppSnapshot) =>
 const selectCurrentPattern = (s: AppSnapshot) => s.context.currentPattern;
 const selectPatternName = (s: AppSnapshot) => s.context.patternName;
 const selectSavedPatterns = (s: AppSnapshot) => s.context.savedPatterns;
+const selectSavedChords = (s: AppSnapshot) => s.context.savedChords;
 const selectErrorMessage = (s: AppSnapshot) => s.context.errorMessage;
 const selectSelectedPatternId = (s: AppSnapshot) => s.context.selectedPatternId;
 const selectIsShowDialog = (s: AppSnapshot) =>
@@ -157,7 +205,6 @@ const destructiveButtonClasses =
   "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-zinc-950 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-red-600 text-zinc-50 hover:bg-red-600/90 h-10 px-4 py-2";
 const labelClasses =
   "text-sm font-medium leading-none text-zinc-400 mb-2 block";
-
 // --- LIT-HTML TEMPLATES ---
 const PatternEditor = (currentPattern: string) => html`
   <textarea
@@ -174,7 +221,6 @@ const PatternEditor = (currentPattern: string) => html`
 ]'
   ></textarea>
 `;
-
 const VisualEditor = (currentPattern: string) => {
   let notes: NoteEvent[] = [];
   try {
@@ -285,7 +331,6 @@ const Controls = (props: {
     </button>
   </div>
 `;
-
 const PatternLoader = (
   savedPatterns: SerializablePattern[],
   selectedId: string | null,
@@ -309,7 +354,6 @@ const PatternLoader = (
     )}
   </select>
 `;
-
 const ErrorMessage = (errorMessage: string | null) => {
   if (!errorMessage) return html``;
   return html`
@@ -370,6 +414,61 @@ const NewPatternDialog = (newPatternName: string) => html`
   </div>
 `;
 
+const ChordBank = (savedChords: SerializableChord[]) => html`
+  <h3 class="text-lg font-medium mb-4 text-zinc-50">Chord Bank</h3>
+  <form
+    @submit=${(e: Event) => {
+      e.preventDefault();
+      const formData = new FormData(e.target as HTMLFormElement);
+      const name = formData.get("chord-name") as string;
+      const tab = formData.get("chord-tab") as string;
+      if (name.trim() && tab.trim()) {
+        appActor.send({ type: "CREATE_CHORD", input: { name, tab } });
+        (e.target as HTMLFormElement).reset();
+      }
+    }}
+    class="flex items-end gap-4 mb-6"
+  >
+    <div class="flex-grow">
+      <label for="chord-name" class=${labelClasses}>Chord Name</label>
+      <input
+        id="chord-name"
+        name="chord-name"
+        type="text"
+        class=${baseInputClasses}
+        placeholder="e.g., G Major"
+        required
+      />
+    </div>
+    <div class="flex-grow">
+      <label for="chord-tab" class=${labelClasses}>Tablature</label>
+      <input
+        id="chord-tab"
+        name="chord-tab"
+        type="text"
+        class="${baseInputClasses} font-mono"
+        placeholder="e.g., 320003"
+        required
+      />
+    </div>
+    <button type="submit" class=${primaryButtonClasses}>Add Chord</button>
+  </form>
+
+  <div class="space-y-2">
+    ${savedChords.map(
+      (chord) => html`
+        <div class="flex items-center gap-4 p-2 bg-zinc-800 rounded">
+          <span class="font-semibold text-zinc-300 w-32">${chord.name}</span>
+          <span class="font-mono text-cyan-400">${chord.tab}</span>
+        </div>
+      `,
+    )}
+    ${savedChords.length === 0
+      ? html`<p class="text-zinc-500">No chords saved yet.</p>`
+      : ""}
+  </div>
+`;
+
 const AppShell = () => html`
   <div class="bg-zinc-950 text-zinc-50 min-h-screen font-sans">
     <div class="container mx-auto p-4 md:p-8 max-w-3xl">
@@ -388,11 +487,13 @@ const AppShell = () => html`
       <div class="mt-8 ${cardClasses}">
         <div id="loader-container"></div>
       </div>
+      <div class="mt-8 ${cardClasses}">
+        <div id="chord-bank-container"></div>
+      </div>
     </div>
     <div id="modal-container"></div>
   </div>
 `;
-
 // --- RENDER & SUBSCRIPTION ---
 const appShellContainer = document.querySelector<HTMLElement>("#app-shell");
 const errorContainer = document.querySelector<HTMLElement>("#error-container");
@@ -409,14 +510,17 @@ const controlsContainer = document.querySelector<HTMLElement>(
 const loaderContainer =
   document.querySelector<HTMLElement>("#loader-container");
 const modalContainer = document.querySelector<HTMLElement>("#modal-container");
+const chordBankContainer = document.querySelector<HTMLElement>(
+  "#chord-bank-container",
+);
 if (
   !editorContainer ||
   !controlsContainer ||
   !loaderContainer ||
-  !modalContainer
+  !modalContainer ||
+  !chordBankContainer
 )
   throw new Error("Could not find component containers");
-
 appActor.subscribe((snapshot) => {
   const viewMode = selectViewMode(snapshot);
 
@@ -444,6 +548,7 @@ appActor.subscribe((snapshot) => {
     ),
     loaderContainer,
   );
+  render(ChordBank(selectSavedChords(snapshot)), chordBankContainer);
   render(ErrorMessage(selectErrorMessage(snapshot)), errorContainer);
   render(
     selectIsShowDialog(snapshot)
@@ -452,7 +557,6 @@ appActor.subscribe((snapshot) => {
     modalContainer,
   );
 });
-
 // --- AUDIO SIDE-EFFECTS ---
 function parseCode(code: string): NoteEvent[] {
   try {
@@ -486,7 +590,6 @@ appActor.subscribe((snapshot) => {
     lastScheduledPattern = currentPatternString;
   }
 });
-
 part = new Part<NoteEvent & { index: number }>((time, value) => {
   synth.triggerAttackRelease(value.note, value.duration, time);
 
@@ -498,5 +601,4 @@ part = new Part<NoteEvent & { index: number }>((time, value) => {
     }, 150);
   }
 }, []).start(0);
-
 updatePart(parseCode(appActor.getSnapshot().context.currentPattern));
