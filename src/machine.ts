@@ -1,6 +1,7 @@
 // src/machine.ts
 import { setup, assign, type PromiseActorLogic } from "xstate";
 import type { SerializablePattern, SerializableChord, SerializableTuning } from "../types/app";
+
 // 1. CONTEXT (State)
 export interface AppContext {
   savedPatterns: SerializablePattern[];
@@ -11,7 +12,8 @@ export interface AppContext {
   selectedPatternId: string | null;
   errorMessage: string | null;
   newPatternName: string;
-  editingChordId: string | null; // NEW: Track which chord is being edited
+  editingChordId: string | null;
+  editingTuningId: string | null; // NEW: Track which tuning is being edited
 }
 
 // 2. EVENTS
@@ -28,7 +30,6 @@ export type AppEvent =
   | { type: "UPDATE_SAVED_PATTERN"; input: { id: string; name: string; content: string } }
   | { type: "TOGGLE_VIEW" }
   | { type: "CREATE_CHORD"; input: { name: string; tab: string; tuning: string } }
-  // NEW: Events for editing and deleting chords
   | { type: "EDIT_CHORD"; id: string }
   | { type: "CANCEL_EDIT_CHORD" }
   | { type: "UPDATE_CHORD"; input: { id: string; name: string; tab: string; tuning: string } }
@@ -36,6 +37,9 @@ export type AppEvent =
   | { type: "CREATE_TUNING"; input: { name: string; notes: string } }
   | { type: "UPDATE_TUNING"; input: { id: string; name: string; notes: string } }
   | { type: "DELETE_TUNING"; id: string }
+  // NEW: Events for editing and canceling tuning edits
+  | { type: "EDIT_TUNING"; id: string }
+  | { type: "CANCEL_EDIT_TUNING" }
   | { type: "done.invoke.fetchInitialData"; output: { patterns: SerializablePattern[], chords: SerializableChord[], tunings: SerializableTuning[] } }
   | { type: "error.platform.fetchInitialData"; error: unknown }
   | { type: "done.invoke.updatePattern" }
@@ -44,7 +48,6 @@ export type AppEvent =
   | { type: "error.platform.createPattern"; error: unknown }
   | { type: "done.invoke.createChord"; output: SerializableChord }
   | { type: "error.platform.createChord"; error: unknown }
-  // NEW: Actor events for chord modification
   | { type: "done.invoke.updateChord" }
   | { type: "error.platform.updateChord"; error: unknown }
   | { type: "done.invoke.deleteChord" }
@@ -74,7 +77,6 @@ export const appMachine = setup({
     createPattern: {} as PromiseActorLogic<SerializablePattern, { name: string; notes: string }>,
     updatePattern: {} as PromiseActorLogic<void, { id: string; name: string; content: string }>,
     createChord: {} as PromiseActorLogic<SerializableChord, { name: string; tab: string; tuning: string }>,
-    // NEW: Define update/delete chord actors
     updateChord: {} as PromiseActorLogic<void, { id: string; name: string; tab: string; tuning: string }>,
     deleteChord: {} as PromiseActorLogic<void, { id: string }>,
     createTuning: {} as PromiseActorLogic<SerializableTuning, { name: string; notes: string }>,
@@ -93,7 +95,8 @@ export const appMachine = setup({
     selectedPatternId: null,
     errorMessage: null,
     newPatternName: "",
-    editingChordId: null, // NEW: Initialize editingChordId
+    editingChordId: null,
+    editingTuningId: null, // NEW: Initialize editingTuningId
   },
   states: {
     initializing: {
@@ -138,7 +141,6 @@ export const appMachine = setup({
                     UPDATE_SAVED_PATTERN: "updating",
                     CREATE_PATTERN: "creating",
                     CREATE_CHORD: "creatingChord",
-                    // NEW: Transitions for chord modification
                     UPDATE_CHORD: "updatingChord",
                     DELETE_CHORD: "deletingChord",
                     CREATE_TUNING: "creatingTuning",
@@ -208,7 +210,6 @@ export const appMachine = setup({
                     },
                   },
                 },
-                // NEW: State for updating a chord
                 updatingChord: {
                   invoke: {
                     id: "updateChord",
@@ -224,7 +225,6 @@ export const appMachine = setup({
                     },
                   },
                 },
-                // NEW: State for deleting a chord
                 deletingChord: {
                   invoke: {
                     id: "deleteChord",
@@ -287,7 +287,8 @@ export const appMachine = setup({
                         savedChords: ({ event }) => event.output.chords,
                         savedTunings: ({ event }) => event.output.tunings,
                         errorMessage: null,
-                        editingChordId: null, // NEW: Reset editing state on reload
+                        editingChordId: null,
+                        editingTuningId: null, // NEW: Reset editing state on reload
                       }),
                     },
                     onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
@@ -336,12 +337,18 @@ export const appMachine = setup({
         selectedPatternId: ({ event }) => event.id,
       }),
     },
-    // NEW: Handlers for chord editing UI
     EDIT_CHORD: {
       actions: assign({ editingChordId: ({ event }) => event.id }),
     },
     CANCEL_EDIT_CHORD: {
       actions: assign({ editingChordId: null }),
+    },
+    // NEW: Handlers for tuning editing UI
+    EDIT_TUNING: {
+      actions: assign({ editingTuningId: ({ event }) => event.id }),
+    },
+    CANCEL_EDIT_TUNING: {
+      actions: assign({ editingTuningId: null }),
     },
   },
 });
