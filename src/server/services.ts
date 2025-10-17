@@ -25,7 +25,6 @@ export const getAllPatterns = () =>
       db
         .selectFrom("pattern")
         .selectAll()
-        .where("deleted", "=", 0)
         .orderBy("created_at", "desc")
         .execute(),
     catch: (cause) => new DatabaseError({ cause }),
@@ -71,8 +70,7 @@ export const deletePattern = (id: string) =>
   Effect.tryPromise({
     try: () =>
       db
-        .updateTable("pattern")
-        .set({ deleted: 1 }) // Soft delete
+        .deleteFrom("pattern")
         .where("id", "=", id)
         .returningAll()
         .executeTakeFirst(),

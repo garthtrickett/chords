@@ -1,5 +1,5 @@
 // src/components/Controls.ts
-import { html } from "lit-html";
+import { html, nothing } from "lit-html";
 import { appActor } from "../client";
 import {
   baseInputClasses,
@@ -30,17 +30,19 @@ export const Controls = (props: {
       >
         Stop Audio
       </button>`}
-  <input
-    type="text"
-    class="${baseInputClasses} flex-grow"
-    placeholder="Pattern Name"
-    .value=${props.patternName}
-    @input=${(e: Event) =>
-    appActor.send({
-      type: "UPDATE_PATTERN_NAME",
-      value: (e.target as HTMLInputElement).value,
-    })}
-  />
+  ${props.selectedPatternId
+    ? html`<input
+        type="text"
+        class="${baseInputClasses} flex-grow"
+        placeholder="Pattern Name"
+        .value=${props.patternName}
+        @input=${(e: Event) =>
+        appActor.send({
+          type: "UPDATE_PATTERN_NAME",
+          value: (e.target as HTMLInputElement).value,
+        })}
+      />`
+    : nothing}
   <button
     class=${secondaryButtonClasses}
     @click=${() => appActor.send({ type: "NEW_PATTERN" })}
@@ -53,25 +55,27 @@ export const Controls = (props: {
   >
     ${props.viewMode === "json" ? "Visual View" : "JSON View"}
   </button>
-  <button
-    class=${primaryButtonClasses}
-    ?disabled=${!props.patternName.trim() ||
-  props.isSaving ||
-  !props.selectedPatternId}
-    @click=${() => {
-    const latest = appActor.getSnapshot();
-    if (latest.context.selectedPatternId) {
-      appActor.send({
-        type: "UPDATE_SAVED_PATTERN",
-        input: {
-          id: latest.context.selectedPatternId,
-          name: latest.context.patternName,
-          content: latest.context.currentPattern,
-        },
-      });
-    }
-  }}
-  >
-    ${props.isSaving ? "Saving..." : "Save Pattern"}
-  </button>
+  ${props.selectedPatternId
+    ? html`<button
+        class=${primaryButtonClasses}
+        ?disabled=${!props.patternName.trim() ||
+      props.isSaving ||
+      !props.selectedPatternId}
+        @click=${() => {
+        const latest = appActor.getSnapshot();
+        if (latest.context.selectedPatternId) {
+          appActor.send({
+            type: "UPDATE_SAVED_PATTERN",
+            input: {
+              id: latest.context.selectedPatternId,
+              name: latest.context.patternName,
+              content: latest.context.currentPattern,
+            },
+          });
+        }
+      }}
+      >
+        ${props.isSaving ? "Saving..." : "Save Pattern"}
+      </button>`
+    : nothing}
 </div>`;

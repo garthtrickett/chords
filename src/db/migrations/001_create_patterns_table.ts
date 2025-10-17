@@ -6,10 +6,8 @@ export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable("pattern")
     .addColumn("id", "text", (col) => col.primaryKey())
-    // MODIFIED: Added the .unique() constraint
     .addColumn("name", "text", (col) => col.notNull().unique())
     .addColumn("notes", "text", (col) => col.notNull())
-    .addColumn("deleted", "boolean", (col) => col.notNull().defaultTo(false))
     .addColumn("created_at", "text", (col) =>
       col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull(),
     )
@@ -18,7 +16,6 @@ export async function up(db: Kysely<any>): Promise<void> {
     )
     .execute();
 
-  // NEW: Add a trigger to automatically update the `updated_at` timestamp on changes.
   await sql`
     CREATE TRIGGER update_pattern_updated_at
     AFTER UPDATE ON pattern
@@ -30,7 +27,6 @@ export async function up(db: Kysely<any>): Promise<void> {
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
-  // NEW: Drop the trigger first
   await sql`DROP TRIGGER IF EXISTS update_pattern_updated_at`.execute(db);
   await db.schema.dropTable("pattern").execute();
 }

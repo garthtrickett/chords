@@ -14,7 +14,6 @@ export interface Chord {
 
 export interface Pattern {
   created_at: Generated<string>;
-  deleted: Generated<number>;
   id: string | null;
   name: string;
   notes: string;
