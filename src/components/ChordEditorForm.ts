@@ -23,10 +23,10 @@ export const ChordEditorForm = (
     const tabInputs = Array.from(
       form.querySelectorAll<HTMLInputElement>('input[name^="fret-"]'),
     );
+    // **FIX: Construct tab from low E to high e directly, without reversing**
     const tab = tabInputs
       .map((input) => (input.value.trim() === "" ? "x" : input.value.trim()))
       .join("");
-
     if (name.trim() && tab.length === 6 && chord.id) {
       appActor.send({
         type: "UPDATE_CHORD",
@@ -72,7 +72,7 @@ export const ChordEditorForm = (
       </div>
     </div>
     <div>
-      <label class=${labelClasses}>Tablature (e B G D A E)</label>
+      <label class=${labelClasses}>Tablature (Strings E A D G B e)</label>
       <div class="grid grid-cols-6 gap-2">
         ${chord.tab
     .split("")

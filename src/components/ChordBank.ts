@@ -1,6 +1,6 @@
 // src/components/ChordBank.ts
 import { html, nothing } from "lit-html";
-import { Chord, Key, Scale } from "tonal";
+import { Chord, Key, Note, RomanNumeral, Scale } from "tonal";
 import type { SerializableChord, SerializableTuning } from "../../types/app";
 import { appActor } from "../client";
 import { ChordEditorForm } from "./ChordEditorForm";
@@ -29,7 +29,7 @@ const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII"];
  * @param chordSymbol The symbol of the chord to analyze (e.g., "G", "Am", "G7").
  * @param keyRoot The root of the key (e.g., "C").
  * @param keyType The type of the key (e.g., "major").
- * @returns The detailed Roman numeral string (e.g., "V", "vi", "V7") or an empty string.
+ * @returns The detailed Roman numeral string (e.g., "V", "vi", "V7sus4") or an empty string.
  */
 function getAdvancedRomanNumeral(
   chordSymbol: string,
@@ -45,7 +45,6 @@ function getAdvancedRomanNumeral(
   const degree = scaleNotes.indexOf(chord.tonic) + 1;
   if (degree === 0 || degree > 7) return "";
 
-  // FIX: Use a reliable array lookup instead of RomanNumeral.get()
   let finalRoman = ROMAN_NUMERALS[degree - 1];
 
   const diatonicTriads = (keyType === 'major' ? Key.majorKey(keyRoot).triads : Key.minorKey(keyRoot).natural.triads);
@@ -55,22 +54,40 @@ function getAdvancedRomanNumeral(
     finalRoman = finalRoman.toLowerCase();
   }
 
-  // Use chord.type for specific qualities not covered by chord.quality
-  if (chord.type === "dominant 7th") {
-    return finalRoman + "⁷";
-  } else if (chord.type === "half-diminished 7th") {
-    return finalRoman + "ø⁷";
-  } else if (chord.quality === "Diminished") {
-    return finalRoman + "°";
-  } else if (chord.quality === "Augmented") {
-    return finalRoman + "+";
-  } else if (chord.type === "major 7th") {
-    return finalRoman + "M⁷";
-  } else if (chord.type === "minor 7th") {
-    return finalRoman + "m⁷";
+  // Handle chord quality and extensions based on chord.type
+  switch (chord.type) {
+    case "major":
+      return finalRoman;
+    case "minor":
+      return finalRoman;
+    case "dominant 7th":
+      return finalRoman + "⁷";
+    case "major 7th":
+      return finalRoman + "M⁷";
+    case "minor 7th":
+      return finalRoman + "m⁷";
+    case "diminished":
+      return finalRoman + "°";
+    case "diminished 7th":
+      return finalRoman + "°⁷";
+    case "half-diminished 7th":
+      return finalRoman + "ø⁷";
+    case "augmented":
+      return finalRoman + "+";
+    case "augmented 7th":
+      return finalRoman + "+⁷";
+    case "suspended 4th":
+      return finalRoman + "sus4";
+    case "suspended 2nd":
+      return finalRoman + "sus2";
+    case "dominant 7th suspended 4th":
+      return finalRoman + "⁷sus4";
+    default:
+      if (chord.aliases[0]) {
+        return finalRoman + chord.aliases[0];
+      }
+      return finalRoman;
   }
-
-  return finalRoman;
 }
 
 
@@ -179,10 +196,11 @@ export const ChordBank = (
       const tabInputs = Array.from(
         form.querySelectorAll<HTMLInputElement>('input[name^="fret-"]'),
       );
-      // Construct tab string from low E to high e
-      const tab = [...tabInputs].reverse().map((input) =>
-        input.value.trim() === "" ? "x" : input.value.trim(),
-      )
+      // **FIX: Construct tab from low E to high e directly, without reversing**
+      const tab = tabInputs
+        .map((input) =>
+          input.value.trim() === "" ? "x" : input.value.trim(),
+        )
         .join("");
       if (name.trim() && tab.length === 6) {
         appActor.send({
@@ -223,7 +241,7 @@ export const ChordBank = (
         </div>
       </div>
       <div>
-        <label class=${labelClasses}>Tablature (Strings e B G D A E)</label>
+        <label class=${labelClasses}>Tablature (Strings E A D G B e)</label>
         <div class="grid grid-cols-6 gap-2">
           ${[...Array(6)].map(
       (_, i) => html`<input
@@ -321,7 +339,7 @@ export const ChordBank = (
             <div
               class="font-mono text-amber-400 flex justify-end gap-x-2 text-sm mt-1"
             >
-              ${[...notes].reverse().map(
+              ${notes.map(
           (note) => html`<span class="w-6 text-center">${note}</span>`,
         )}
             </div>
