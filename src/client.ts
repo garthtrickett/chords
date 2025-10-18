@@ -2,12 +2,12 @@
 import "./index.css";
 import { render, html } from "lit-html";
 import { createActor, fromPromise } from "xstate";
-import { Effect } from "effect"; // <-- FIX: Import Effect directly
+import { Effect } from "effect";
+// <-- FIX: Import Effect directly
 import { appMachine } from "./machine";
 import * as api from "./api/client";
 import * as player from "./audio/player";
 import * as selectors from "./state/selectors";
-
 // Import UI Components
 import { AppShell } from "./components/AppShell";
 import { PatternEditor } from "./components/PatternEditor";
@@ -64,7 +64,6 @@ const machineWithImplementations = appMachine.provide({
     ),
   },
 });
-
 export const appActor = createActor(machineWithImplementations).start();
 
 // --- RENDER & SUBSCRIPTION ---
@@ -73,7 +72,6 @@ const getContainer = (id: string) => {
   if (!el) throw new Error(`Could not find container with id: ${id}`);
   return el;
 };
-
 // Initial render of the static shell
 render(AppShell(), getContainer("#app-shell"));
 
@@ -94,14 +92,33 @@ player.initializePlayer(
 // --- MAIN SUBSCRIPTION LOOP ---
 let lastScheduledPattern = "";
 appActor.subscribe((snapshot) => {
+  const selectedPatternId = selectors.selectSelectedPatternId(snapshot);
+
   // --- Render UI Components ---
-  const viewMode = selectors.selectViewMode(snapshot);
-  render(
-    viewMode === "json"
-      ? PatternEditor(selectors.selectCurrentPattern(snapshot))
-      : VisualEditor(selectors.selectCurrentPattern(snapshot)),
-    editorContainer,
-  );
+  if (selectedPatternId) {
+    const viewMode = selectors.selectViewMode(snapshot);
+    render(
+      viewMode === "json"
+        ? PatternEditor(selectors.selectCurrentPattern(snapshot))
+        : VisualEditor(
+          selectors.selectCurrentPattern(snapshot),
+          selectors.selectNotesInCurrentKey(snapshot),
+        ),
+      editorContainer,
+    );
+  } else {
+    render(
+      html`<div
+        class="min-h-[240px] flex items-center justify-center text-center text-zinc-500"
+      >
+        <div>
+          <p class="font-medium text-zinc-400">No pattern loaded.</p>
+          <p class="text-sm">Create a new pattern to get started.</p>
+        </div>
+      </div>`,
+      editorContainer,
+    );
+  }
 
   render(
     Controls({
@@ -109,7 +126,9 @@ appActor.subscribe((snapshot) => {
       isSaving: selectors.selectIsSaving(snapshot),
       patternName: selectors.selectPatternName(snapshot),
       selectedPatternId: selectors.selectSelectedPatternId(snapshot),
-      viewMode: viewMode,
+      viewMode: selectors.selectViewMode(snapshot),
+      keyRoot: selectors.selectKeyRoot(snapshot),
+      keyType: selectors.selectKeyType(snapshot),
     }),
     controlsContainer,
   );
@@ -130,7 +149,6 @@ appActor.subscribe((snapshot) => {
     ),
     chordBankContainer,
   );
-
   render(
     TuningManager(
       selectors.selectSavedTunings(snapshot),
@@ -138,7 +156,6 @@ appActor.subscribe((snapshot) => {
     ),
     tuningManagerContainer,
   );
-
   render(ErrorMessage(selectors.selectErrorMessage(snapshot)), errorContainer);
 
   render(
@@ -147,7 +164,6 @@ appActor.subscribe((snapshot) => {
       : html``,
     modalContainer,
   );
-
   // --- Audio Side-Effects ---
   player.toggleAudio(selectors.selectIsAudioOn(snapshot));
 

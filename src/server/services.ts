@@ -46,7 +46,12 @@ export const createPattern = (newPattern: InsertablePattern) =>
 
 export const updatePattern = (
   id: string,
-  data: { name: string; notes: string },
+  data: {
+    name: string;
+    notes: string;
+    key_root: string;
+    key_type: string;
+  },
 ) =>
   Effect.tryPromise({
     try: () =>

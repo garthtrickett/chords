@@ -6,7 +6,6 @@ import type {
   SerializablePattern,
   SerializableChord,
   SerializableTuning,
-  InsertablePattern,
 } from "../../types/app";
 
 // --- EDEN & ERROR SETUP ---
@@ -71,7 +70,12 @@ export const fetchInitialDataEffect = Effect.all([
   }),
 );
 
-export const createPatternEffect = (input: { name: string; notes: string }) =>
+export const createPatternEffect = (input: {
+  name: string;
+  notes: string;
+  key_root: string;
+  key_type: string;
+}) =>
   Effect.promise(() => client.patterns.post(input)).pipe(
     Effect.flatMap((response) => {
       if (response && response.error) {
@@ -92,10 +96,12 @@ export const updatePatternEffect = (input: {
   id: string;
   name: string;
   content: string;
+  key_root: string;
+  key_type: string;
 }) => {
-  const { id, name, content } = input;
+  const { id, name, content, key_root, key_type } = input;
   return Effect.promise(() =>
-    client.patterns({ id }).put({ name, notes: content }),
+    client.patterns({ id }).put({ name, notes: content, key_root, key_type }),
   ).pipe(
     Effect.flatMap((response) => {
       if (response && response.error) {

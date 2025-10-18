@@ -8,3 +8,5 @@ Also never write out the files not in full with stuff like
   };
 !!! always write the files in full unless explicitly told not to.
 
+NEVER DO DIFFS ALWAYS FULL FILES
+

@@ -26,3 +26,25 @@ export const selectViewMode = (s: AppSnapshot) =>
   s.matches({ running: { editing: { viewMode: "visual" } } })
     ? "visual"
     : "json";
+
+// NEW: Selectors for the musical key context
+export const selectKeyRoot = (s: AppSnapshot) => s.context.keyRoot;
+export const selectKeyType = (s: AppSnapshot) => s.context.keyType;
+
+// --- Music Theory Logic ---
+const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]; // W, W, H, W, W, W, H
+const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // W, H, W, W, H, W, W
+
+export const selectNotesInCurrentKey = (s: AppSnapshot): string[] => {
+  const { keyRoot, keyType } = s.context;
+  const rootIndex = NOTES.indexOf(keyRoot);
+  if (rootIndex === -1) return [];
+
+  const intervals = keyType === "major" ? MAJOR_INTERVALS : MINOR_INTERVALS;
+
+  return intervals.map((interval) => {
+    const noteIndex = (rootIndex + interval) % 12;
+    return NOTES[noteIndex];
+  });
+};

@@ -15,6 +15,8 @@ export interface Chord {
 export interface Pattern {
   created_at: Generated<string>;
   id: string | null;
+  key_root: Generated<string>;
+  key_type: Generated<string>;
   name: string;
   notes: string;
   updated_at: Generated<string>;

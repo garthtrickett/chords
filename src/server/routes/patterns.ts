@@ -26,11 +26,7 @@ export const patternRoutes = new Elysia({ prefix: "/patterns" })
   .post(
     "/",
     async ({ body, set }) => {
-      const newPattern: InsertablePattern = {
-        id: nanoid(),
-        name: body.name,
-        notes: body.notes,
-      };
+      const newPattern: InsertablePattern = { id: nanoid(), ...body };
       const program = createPattern(newPattern);
       return await Effect.runPromise(
         Effect.match(program, {
@@ -45,7 +41,14 @@ export const patternRoutes = new Elysia({ prefix: "/patterns" })
         }),
       );
     },
-    { body: t.Object({ name: t.String(), notes: t.String() }) },
+    {
+      body: t.Object({
+        name: t.String(),
+        notes: t.String(),
+        key_root: t.String(),
+        key_type: t.String(),
+      }),
+    },
   )
   .put(
     "/:id",
@@ -65,7 +68,12 @@ export const patternRoutes = new Elysia({ prefix: "/patterns" })
       );
     },
     {
-      body: t.Object({ name: t.String(), notes: t.String() }),
+      body: t.Object({
+        name: t.String(),
+        notes: t.String(),
+        key_root: t.String(),
+        key_type: t.String(),
+      }),
       params: t.Object({ id: t.String() }),
     },
   )

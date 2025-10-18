@@ -4,8 +4,8 @@ import type {
   SerializablePattern,
   SerializableChord,
   SerializableTuning,
+  NoteEvent,
 } from "../types/app";
-
 // 1. CONTEXT (State)
 export interface AppContext {
   savedPatterns: SerializablePattern[];
@@ -17,7 +17,9 @@ export interface AppContext {
   errorMessage: string | null;
   newPatternName: string;
   editingChordId: string | null;
-  editingTuningId: string | null; // NEW: Track which tuning is being edited
+  editingTuningId: string | null;
+  keyRoot: string;
+  keyType: "major" | "minor";
 }
 
 // 2. EVENTS
@@ -31,7 +33,16 @@ export type AppEvent =
   | { type: "CANCEL_NEW_PATTERN" }
   | { type: "UPDATE_NEW_PATTERN_NAME"; value: string }
   | { type: "CREATE_PATTERN"; name: string }
-  | { type: "UPDATE_SAVED_PATTERN"; input: { id: string; name: string; content: string } }
+  | {
+    type: "UPDATE_SAVED_PATTERN";
+    input: {
+      id: string;
+      name: string;
+      content: string;
+      key_root: string;
+      key_type: string;
+    };
+  }
   | { type: "DELETE_PATTERN"; id: string }
   | { type: "TOGGLE_VIEW" }
   | { type: "CREATE_CHORD"; input: { name: string; tab: string; tuning: string } }
@@ -42,9 +53,11 @@ export type AppEvent =
   | { type: "CREATE_TUNING"; input: { name: string; notes: string } }
   | { type: "UPDATE_TUNING"; input: { id: string; name: string; notes: string } }
   | { type: "DELETE_TUNING"; id: string }
-  // NEW: Events for editing and canceling tuning edits
   | { type: "EDIT_TUNING"; id: string }
   | { type: "CANCEL_EDIT_TUNING" }
+  | { type: "LOAD_CHORD_INTO_PATTERN"; chordId: string }
+  | { type: "SET_KEY_ROOT"; root: string }
+  | { type: "SET_KEY_TYPE"; keyType: "major" | "minor" }
   | { type: "done.invoke.fetchInitialData"; output: { patterns: SerializablePattern[], chords: SerializableChord[], tunings: SerializableTuning[] } }
   | { type: "error.platform.fetchInitialData"; error: unknown }
   | { type: "done.invoke.updatePattern" }
@@ -65,24 +78,53 @@ export type AppEvent =
   | { type: "error.platform.updateTuning"; error: unknown }
   | { type: "done.invoke.deleteTuning" }
   | { type: "error.platform.deleteTuning"; error: unknown };
-
 // 3. CONSTANTS
 const defaultPattern = JSON.stringify(
   [{ time: "0:0", note: "C4", duration: "8n" }, { time: "0:1", note: "E4", duration: "8n" }], null, 2
 );
-
 const getErrorMessage = (error: unknown): string => {
   if (typeof error === "object" && error !== null && "message" in error) return String(error.message);
   return "An unexpected error occurred.";
 };
+
+// --- HELPERS for chord logic ---
+const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const NOTE_MAP: Record<string, number> = {
+  "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6,
+  "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
+};
+function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
+  const notes: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const fret = tab[i];
+    if (fret === "x" || fret === "X" || fret === undefined) {
+      notes.push("x");
+      continue;
+    }
+    const fretNum = parseInt(fret, 10);
+    if (isNaN(fretNum)) {
+      notes.push("?");
+      continue;
+    }
+    const openStringNote = tuningNotes[i]?.toUpperCase();
+    if (!openStringNote || NOTE_MAP[openStringNote] === undefined) {
+      notes.push("?");
+      continue;
+    }
+    const openNoteIndex = NOTE_MAP[openStringNote];
+    const finalNoteIndex = (openNoteIndex + fretNum) % 12;
+    notes.push(NOTES[finalNoteIndex]);
+  }
+  return notes;
+}
 
 // 4. MACHINE DEFINITION (with setup)
 export const appMachine = setup({
   types: {} as { context: AppContext; events: AppEvent },
   actors: {
     fetchInitialData: {} as PromiseActorLogic<{ patterns: SerializablePattern[], chords: SerializableChord[], tunings: SerializableTuning[] }>,
-    createPattern: {} as PromiseActorLogic<SerializablePattern, { name: string; notes: string }>,
-    updatePattern: {} as PromiseActorLogic<void, { id: string; name: string; content: string }>,
+    createPattern: {} as PromiseActorLogic<SerializablePattern, { name: string; notes: string; key_root: string; key_type: string }>,
+    updatePattern: {} as PromiseActorLogic<void, { id: string; name: string; content: string; key_root: string; key_type: string }>,
     deletePattern: {} as PromiseActorLogic<void, { id: string }>,
     createChord: {} as PromiseActorLogic<SerializableChord, { name: string; tab: string; tuning: string }>,
     updateChord: {} as PromiseActorLogic<void, { id: string; name: string; tab: string; tuning: string }>,
@@ -104,7 +146,9 @@ export const appMachine = setup({
     errorMessage: null,
     newPatternName: "",
     editingChordId: null,
-    editingTuningId: null, // NEW: Initialize editingTuningId
+    editingTuningId: null,
+    keyRoot: "C",
+    keyType: "major",
   },
   states: {
     initializing: {
@@ -120,6 +164,8 @@ export const appMachine = setup({
             currentPattern: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].notes : defaultPattern,
             patternName: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].name : "",
             selectedPatternId: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].id : null,
+            keyRoot: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].key_root : "C",
+            keyType: ({ event }) => event.output.patterns.length > 0 ? (event.output.patterns[0].key_type as "major" | "minor") : "major",
           }),
         },
         onError: {
@@ -180,9 +226,14 @@ export const appMachine = setup({
                   invoke: {
                     id: "createPattern",
                     src: "createPattern",
-                    input: ({ event }) => {
+                    input: ({ context, event }) => {
                       if (event.type === "CREATE_PATTERN")
-                        return { name: event.name, notes: defaultPattern };
+                        return {
+                          name: event.name,
+                          notes: defaultPattern,
+                          key_root: context.keyRoot,
+                          key_type: context.keyType,
+                        };
                       throw new Error("Invalid event for actor");
                     },
                     onDone: {
@@ -191,6 +242,8 @@ export const appMachine = setup({
                         selectedPatternId: ({ event }) => event.output.id,
                         patternName: ({ event }) => event.output.name,
                         currentPattern: ({ event }) => event.output.notes,
+                        keyRoot: ({ event }) => event.output.key_root,
+                        keyType: ({ event }) => event.output.key_type as "major" | "minor",
                       }),
                     },
                     onError: {
@@ -312,7 +365,7 @@ export const appMachine = setup({
                         savedTunings: ({ event }) => event.output.tunings,
                         errorMessage: null,
                         editingChordId: null,
-                        editingTuningId: null, // NEW: Reset editing state on reload
+                        editingTuningId: null,
                       }),
                     },
                     onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
@@ -334,6 +387,8 @@ export const appMachine = setup({
                         currentPattern: defaultPattern,
                         patternName: "",
                         selectedPatternId: null,
+                        keyRoot: "C",
+                        keyType: "major",
                       }),
                     },
                     onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
@@ -380,6 +435,16 @@ export const appMachine = setup({
           return selected ? selected.name : context.patternName;
         },
         selectedPatternId: ({ event }) => event.id,
+        keyRoot: ({ context, event }) => {
+          const selected = context.savedPatterns.find((p) => p.id === event.id);
+          return selected ? selected.key_root : context.keyRoot;
+        },
+        keyType: ({ context, event }) => {
+          const selected = context.savedPatterns.find((p) => p.id === event.id);
+          return selected
+            ? (selected.key_type as "major" | "minor")
+            : context.keyType;
+        },
       }),
     },
     EDIT_CHORD: {
@@ -388,12 +453,63 @@ export const appMachine = setup({
     CANCEL_EDIT_CHORD: {
       actions: assign({ editingChordId: null }),
     },
-    // NEW: Handlers for tuning editing UI
     EDIT_TUNING: {
       actions: assign({ editingTuningId: ({ event }) => event.id }),
     },
     CANCEL_EDIT_TUNING: {
       actions: assign({ editingTuningId: null }),
+    },
+    LOAD_CHORD_INTO_PATTERN: {
+      actions: assign({
+        currentPattern: ({ context, event }) => {
+          const chord = context.savedChords.find((c) => c.id === event.chordId);
+          if (!chord) return context.currentPattern;
+
+          const tuning = context.savedTunings.find(
+            (t) => t.name === chord.tuning,
+          );
+          if (!tuning) return context.currentPattern;
+
+          const tuningNotes = tuning.notes.split(" ");
+          const chordNotes = calculateChordNotes(chord.tab, tuningNotes).filter(
+            (n) => n !== "x" && n !== "?",
+          );
+
+          let existingPattern: NoteEvent[] = [];
+          try {
+            const parsed = JSON.parse(context.currentPattern);
+            if (Array.isArray(parsed)) existingPattern = parsed;
+          } catch (e) {
+            // Start with an empty pattern if current one is invalid
+          }
+
+          let maxBar = -1;
+          existingPattern.forEach((note) => {
+            if (typeof note.time === "string") {
+              const match = note.time.match(/^(\d+):/);
+              if (match) {
+                const bar = parseInt(match[1], 10);
+                if (bar > maxBar) maxBar = bar;
+              }
+            }
+          });
+          const newTime = `${maxBar + 1}:0`;
+
+          const newNoteEvents: NoteEvent[] = chordNotes.map((noteName) => ({
+            time: newTime,
+            note: `${noteName}4`, // Add default octave 4
+            duration: "4n", // Default to a quarter note
+          }));
+          const updatedPattern = [...existingPattern, ...newNoteEvents];
+          return JSON.stringify(updatedPattern, null, 2);
+        },
+      }),
+    },
+    SET_KEY_ROOT: {
+      actions: assign({ keyRoot: ({ event }) => event.root }),
+    },
+    SET_KEY_TYPE: {
+      actions: assign({ keyType: ({ event }) => event.keyType }),
     },
   },
 });

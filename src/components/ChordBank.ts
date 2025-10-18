@@ -50,7 +50,6 @@ export const ChordBank = (
   const tuningsMap = new Map(
     savedTunings.map((t) => [t.name, t.notes.split(" ")]),
   );
-
   return html`
     <h3 class="text-lg font-medium mb-4 text-zinc-50">Chord Bank</h3>
     <form
@@ -68,7 +67,6 @@ export const ChordBank = (
           input.value.trim() === "" ? "x" : input.value.trim(),
         )
         .join("");
-
       if (name.trim() && tab.length === 6) {
         appActor.send({
           type: "CREATE_CHORD",
@@ -152,6 +150,18 @@ export const ChordBank = (
           .map((fret) => html`<span>${fret}</span>`)}
                 </div>
                 <div class="flex gap-2">
+                  <button
+                    @click=${() => {
+          if (chord.id)
+            appActor.send({
+              type: "LOAD_CHORD_INTO_PATTERN",
+              chordId: chord.id,
+            });
+        }}
+                    class="${secondaryButtonClasses} h-8 px-3 text-xs"
+                  >
+                    Load
+                  </button>
                   <button
                     @click=${() => {
           if (chord.id)
