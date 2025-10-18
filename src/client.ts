@@ -1,7 +1,8 @@
 // src/client.ts
 import "./index.css";
 import { render, html } from "lit-html";
-import { createActor, fromPromise, type Actor } from "xstate"; // Import Actor type
+import { createActor, fromPromise, type Actor } from "xstate";
+// Import Actor type
 import { Effect } from "effect";
 import { appMachine } from "./machine";
 import * as api from "./api/client";
@@ -57,13 +58,11 @@ const machineWithImplementations = appMachine.provide({
 // --- RENDER & HMR LOGIC ---
 let appActor: Actor<typeof machineWithImplementations>;
 let lastScheduledPattern = "";
-
 const getContainer = (id: string) => {
   const el = document.querySelector<HTMLElement>(id);
   if (!el) throw new Error(`Could not find container with id: ${id}`);
   return el;
 };
-
 // Encapsulate the rendering logic into a function
 const runApplication = () => {
   // Get all containers for dynamic content
@@ -139,6 +138,8 @@ const runApplication = () => {
         selectors.selectEditingChordId(snapshot),
         selectors.selectKeyRoot(snapshot),
         selectors.selectKeyType(snapshot),
+        selectors.selectChordBankFilterKey(snapshot),
+        selectors.selectChordBankFilterTuning(snapshot),
       ),
       chordBankContainer,
     );
@@ -157,6 +158,7 @@ const runApplication = () => {
         : html``,
       modalContainer,
     );
+
     // --- Audio Side-Effects ---
     player.toggleAudio(selectors.selectIsAudioOn(snapshot));
 
@@ -187,5 +189,3 @@ if (import.meta.hot) {
 
 // Export the actor so it can be used in other files if needed
 export { appActor };
-
-

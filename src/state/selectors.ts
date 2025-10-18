@@ -1,7 +1,6 @@
 // src/state/selectors.ts
 import { type SnapshotFrom } from "xstate";
 import { appMachine } from "../machine";
-
 export type AppSnapshot = SnapshotFrom<typeof appMachine>;
 
 export const selectIsAudioOn = (s: AppSnapshot) =>
@@ -30,6 +29,10 @@ export const selectViewMode = (s: AppSnapshot) =>
 // NEW: Selectors for the musical key context
 export const selectKeyRoot = (s: AppSnapshot) => s.context.keyRoot;
 export const selectKeyType = (s: AppSnapshot) => s.context.keyType;
+export const selectChordBankFilterKey = (s: AppSnapshot) =>
+  s.context.chordBankFilterKey;
+export const selectChordBankFilterTuning = (s: AppSnapshot) =>
+  s.context.chordBankFilterTuning;
 
 // --- Music Theory Logic ---
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -42,7 +45,6 @@ export const selectNotesInCurrentKey = (s: AppSnapshot): string[] => {
   if (rootIndex === -1) return [];
 
   const intervals = keyType === "major" ? MAJOR_INTERVALS : MINOR_INTERVALS;
-
   return intervals.map((interval) => {
     const noteIndex = (rootIndex + interval) % 12;
     return NOTES[noteIndex];

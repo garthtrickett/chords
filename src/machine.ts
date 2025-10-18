@@ -6,6 +6,7 @@ import type {
   SerializableTuning,
   NoteEvent,
 } from "../types/app";
+
 // 1. CONTEXT (State)
 export interface AppContext {
   savedPatterns: SerializablePattern[];
@@ -20,6 +21,8 @@ export interface AppContext {
   editingTuningId: string | null;
   keyRoot: string;
   keyType: "major" | "minor";
+  chordBankFilterKey: string | null;
+  chordBankFilterTuning: string | null;
 }
 
 // 2. EVENTS
@@ -48,17 +51,33 @@ export type AppEvent =
   | { type: "CREATE_CHORD"; input: { name: string; tab: string; tuning: string } }
   | { type: "EDIT_CHORD"; id: string }
   | { type: "CANCEL_EDIT_CHORD" }
-  | { type: "UPDATE_CHORD"; input: { id: string; name: string; tab: string; tuning: string } }
+  | {
+    type: "UPDATE_CHORD";
+    input: { id: string; name: string; tab: string; tuning: string };
+  }
   | { type: "DELETE_CHORD"; id: string }
   | { type: "CREATE_TUNING"; input: { name: string; notes: string } }
-  | { type: "UPDATE_TUNING"; input: { id: string; name: string; notes: string } }
+  | {
+    type: "UPDATE_TUNING";
+    input: { id: string; name: string; notes: string };
+  }
   | { type: "DELETE_TUNING"; id: string }
   | { type: "EDIT_TUNING"; id: string }
   | { type: "CANCEL_EDIT_TUNING" }
   | { type: "LOAD_CHORD_INTO_PATTERN"; chordId: string }
   | { type: "SET_KEY_ROOT"; root: string }
   | { type: "SET_KEY_TYPE"; keyType: "major" | "minor" }
-  | { type: "done.invoke.fetchInitialData"; output: { patterns: SerializablePattern[], chords: SerializableChord[], tunings: SerializableTuning[] } }
+  | { type: "SET_CHORD_BANK_FILTER"; key: string }
+  | { type: "SET_CHORD_BANK_FILTER_TUNING"; tuning: string }
+  | { type: "CLEAR_CHORD_BANK_FILTERS" }
+  | {
+    type: "done.invoke.fetchInitialData";
+    output: {
+      patterns: SerializablePattern[];
+      chords: SerializableChord[];
+      tunings: SerializableTuning[];
+    };
+  }
   | { type: "error.platform.fetchInitialData"; error: unknown }
   | { type: "done.invoke.updatePattern" }
   | { type: "error.platform.updatePattern"; error: unknown }
@@ -78,20 +97,35 @@ export type AppEvent =
   | { type: "error.platform.updateTuning"; error: unknown }
   | { type: "done.invoke.deleteTuning" }
   | { type: "error.platform.deleteTuning"; error: unknown };
+
 // 3. CONSTANTS
-const defaultPattern = JSON.stringify(
-  [{ time: "0:0", note: "C4", duration: "8n" }, { time: "0:1", note: "E4", duration: "8n" }], null, 2
-);
+const defaultPattern = JSON.stringify([], null, 2);
 const getErrorMessage = (error: unknown): string => {
-  if (typeof error === "object" && error !== null && "message" in error) return String(error.message);
+  if (typeof error === "object" && error !== null && "message" in error)
+    return String(error.message);
   return "An unexpected error occurred.";
 };
 
 // --- HELPERS for chord logic ---
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const NOTE_MAP: Record<string, number> = {
-  "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6,
-  "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
+  "C": 0,
+  "C#": 1,
+  "Db": 1,
+  "D": 2,
+  "D#": 3,
+  "Eb": 3,
+  "E": 4,
+  "F": 5,
+  "F#": 6,
+  "Gb": 6,
+  "G": 7,
+  "G#": 8,
+  "Ab": 8,
+  "A": 9,
+  "A#": 10,
+  "Bb": 10,
+  "B": 11,
 };
 function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
   const notes: string[] = [];
@@ -122,15 +156,37 @@ function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
 export const appMachine = setup({
   types: {} as { context: AppContext; events: AppEvent },
   actors: {
-    fetchInitialData: {} as PromiseActorLogic<{ patterns: SerializablePattern[], chords: SerializableChord[], tunings: SerializableTuning[] }>,
-    createPattern: {} as PromiseActorLogic<SerializablePattern, { name: string; notes: string; key_root: string; key_type: string }>,
-    updatePattern: {} as PromiseActorLogic<void, { id: string; name: string; content: string; key_root: string; key_type: string }>,
+    fetchInitialData: {} as PromiseActorLogic<{
+      patterns: SerializablePattern[];
+      chords: SerializableChord[];
+      tunings: SerializableTuning[];
+    }>,
+    createPattern: {} as PromiseActorLogic<
+      SerializablePattern,
+      { name: string; notes: string; key_root: string; key_type: string }
+    >,
+    updatePattern: {} as PromiseActorLogic<
+      void,
+      { id: string; name: string; content: string; key_root: string; key_type: string }
+    >,
     deletePattern: {} as PromiseActorLogic<void, { id: string }>,
-    createChord: {} as PromiseActorLogic<SerializableChord, { name: string; tab: string; tuning: string }>,
-    updateChord: {} as PromiseActorLogic<void, { id: string; name: string; tab: string; tuning: string }>,
+    createChord: {} as PromiseActorLogic<
+      SerializableChord,
+      { name: string; tab: string; tuning: string }
+    >,
+    updateChord: {} as PromiseActorLogic<
+      void,
+      { id: string; name: string; tab: string; tuning: string }
+    >,
     deleteChord: {} as PromiseActorLogic<void, { id: string }>,
-    createTuning: {} as PromiseActorLogic<SerializableTuning, { name: string; notes: string }>,
-    updateTuning: {} as PromiseActorLogic<void, { id: string; name: string; notes: string }>,
+    createTuning: {} as PromiseActorLogic<
+      SerializableTuning,
+      { name: string; notes: string }
+    >,
+    updateTuning: {} as PromiseActorLogic<
+      void,
+      { id: string; name: string; notes: string }
+    >,
     deleteTuning: {} as PromiseActorLogic<void, { id: string }>,
   },
 }).createMachine({
@@ -149,6 +205,8 @@ export const appMachine = setup({
     editingTuningId: null,
     keyRoot: "C",
     keyType: "major",
+    chordBankFilterKey: null,
+    chordBankFilterTuning: null,
   },
   states: {
     initializing: {
@@ -161,16 +219,33 @@ export const appMachine = setup({
             savedPatterns: ({ event }) => event.output.patterns,
             savedChords: ({ event }) => event.output.chords,
             savedTunings: ({ event }) => event.output.tunings,
-            currentPattern: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].notes : defaultPattern,
-            patternName: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].name : "",
-            selectedPatternId: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].id : null,
-            keyRoot: ({ event }) => event.output.patterns.length > 0 ? event.output.patterns[0].key_root : "C",
-            keyType: ({ event }) => event.output.patterns.length > 0 ? (event.output.patterns[0].key_type as "major" | "minor") : "major",
+            currentPattern: ({ event }) =>
+              event.output.patterns.length > 0
+                ? event.output.patterns[0].notes
+                : defaultPattern,
+            patternName: ({ event }) =>
+              event.output.patterns.length > 0
+                ? event.output.patterns[0].name
+                : "",
+            selectedPatternId: ({ event }) =>
+              event.output.patterns.length > 0
+                ? event.output.patterns[0].id
+                : null,
+            keyRoot: ({ event }) =>
+              event.output.patterns.length > 0
+                ? event.output.patterns[0].key_root
+                : "C",
+            keyType: ({ event }) =>
+              event.output.patterns.length > 0
+                ? (event.output.patterns[0].key_type as "major" | "minor")
+                : "major",
           }),
         },
         onError: {
           target: "running",
-          actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }),
+          actions: assign({
+            errorMessage: ({ event }) => getErrorMessage(event.error),
+          }),
         },
       },
     },
@@ -243,7 +318,8 @@ export const appMachine = setup({
                         patternName: ({ event }) => event.output.name,
                         currentPattern: ({ event }) => event.output.notes,
                         keyRoot: ({ event }) => event.output.key_root,
-                        keyType: ({ event }) => event.output.key_type as "major" | "minor",
+                        keyType: ({ event }) =>
+                          event.output.key_type as "major" | "minor",
                       }),
                     },
                     onError: {
@@ -260,13 +336,17 @@ export const appMachine = setup({
                     id: "deletePattern",
                     src: "deletePattern",
                     input: ({ event }) => {
-                      if (event.type === "DELETE_PATTERN") return { id: event.id };
+                      if (event.type === "DELETE_PATTERN")
+                        return { id: event.id };
                       throw new Error("Invalid event for actor");
                     },
                     onDone: "reloadingAndResetting",
                     onError: {
                       target: "idle",
-                      actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }),
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
                     },
                   },
                 },
@@ -282,7 +362,8 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-                        errorMessage: ({ event }) => getErrorMessage(event.error),
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
                       }),
                     },
                   },
@@ -298,7 +379,10 @@ export const appMachine = setup({
                     onDone: "reloading",
                     onError: {
                       target: "idle",
-                      actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }),
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
                     },
                   },
                 },
@@ -307,13 +391,17 @@ export const appMachine = setup({
                     id: "deleteChord",
                     src: "deleteChord",
                     input: ({ event }) => {
-                      if (event.type === "DELETE_CHORD") return { id: event.id };
+                      if (event.type === "DELETE_CHORD")
+                        return { id: event.id };
                       throw new Error("Invalid event for actor");
                     },
                     onDone: "reloading",
                     onError: {
                       target: "idle",
-                      actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }),
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
                     },
                   },
                 },
@@ -326,7 +414,13 @@ export const appMachine = setup({
                       throw new Error("Invalid event for actor");
                     },
                     onDone: "reloading",
-                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                    onError: {
+                      target: "idle",
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
+                    },
                   },
                 },
                 updatingTuning: {
@@ -338,7 +432,13 @@ export const appMachine = setup({
                       throw new Error("Invalid event for actor");
                     },
                     onDone: "reloading",
-                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                    onError: {
+                      target: "idle",
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
+                    },
                   },
                 },
                 deletingTuning: {
@@ -346,11 +446,18 @@ export const appMachine = setup({
                     id: "deleteTuning",
                     src: "deleteTuning",
                     input: ({ event }) => {
-                      if (event.type === "DELETE_TUNING") return { id: event.id };
+                      if (event.type === "DELETE_TUNING")
+                        return { id: event.id };
                       throw new Error("Invalid event for actor");
                     },
                     onDone: "reloading",
-                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                    onError: {
+                      target: "idle",
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
+                    },
                   },
                 },
                 reloading: {
@@ -368,7 +475,13 @@ export const appMachine = setup({
                         editingTuningId: null,
                       }),
                     },
-                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                    onError: {
+                      target: "idle",
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
+                    },
                   },
                 },
                 reloadingAndResetting: {
@@ -391,12 +504,24 @@ export const appMachine = setup({
                         keyType: "major",
                       }),
                     },
-                    onError: { target: "idle", actions: assign({ errorMessage: ({ event }) => getErrorMessage(event.error) }) },
+                    onError: {
+                      target: "idle",
+                      actions: assign({
+                        errorMessage: ({ event }) =>
+                          getErrorMessage(event.error),
+                      }),
+                    },
                   },
                 },
               },
             },
-            viewMode: { initial: "json", states: { json: { on: { TOGGLE_VIEW: "visual" } }, visual: { on: { TOGGLE_VIEW: "json" } } } },
+            viewMode: {
+              initial: "json",
+              states: {
+                json: { on: { TOGGLE_VIEW: "visual" } },
+                visual: { on: { TOGGLE_VIEW: "json" } },
+              },
+            },
           },
           on: { NEW_PATTERN: "showingNewPatternDialog" },
         },
@@ -510,6 +635,17 @@ export const appMachine = setup({
     },
     SET_KEY_TYPE: {
       actions: assign({ keyType: ({ event }) => event.keyType }),
+    },
+    SET_CHORD_BANK_FILTER: {
+      actions: assign({ chordBankFilterKey: ({ event }) => event.key || null }),
+    },
+    SET_CHORD_BANK_FILTER_TUNING: {
+      actions: assign({
+        chordBankFilterTuning: ({ event }) => event.tuning || null,
+      }),
+    },
+    CLEAR_CHORD_BANK_FILTERS: {
+      actions: assign({ chordBankFilterKey: null, chordBankFilterTuning: null }),
     },
   },
 });

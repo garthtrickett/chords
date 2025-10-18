@@ -23,6 +23,7 @@ const NOTE_MAP: Record<string, number> = {
 const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]; // W, W, H, W, W, W, H
 const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // W, H, W, W, H, W, W
 const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII"];
+const ALL_KEYS = NOTES.flatMap((note) => [`${note} Major`, `${note} Minor`]);
 
 /**
  * Generates a detailed Roman numeral by analyzing a chord within a key,
@@ -42,26 +43,39 @@ function getAdvancedRomanNumeral(
   const scale = Scale.get(keyName);
   const chord = Chord.get(chordSymbol);
   if (chord.empty || !chord.tonic) return "";
-
   const degree = scale.notes.indexOf(chord.tonic) + 1;
 
   // Append extensions and alterations to a base numeral
   const appendSuffix = (baseNumeral: string) => {
     switch (chord.type) {
-      case "major": return baseNumeral;
-      case "minor": return baseNumeral;
-      case "dominant 7th": return baseNumeral + "⁷";
-      case "major 7th": return baseNumeral + "M⁷";
-      case "minor 7th": return baseNumeral + "m⁷";
-      case "diminished": return baseNumeral + "°";
-      case "diminished 7th": return baseNumeral + "°⁷";
-      case "half-diminished 7th": return baseNumeral + "ø⁷";
-      case "augmented": return baseNumeral + "+";
-      case "major 9th": return baseNumeral + "M⁹";
-      case "minor 9th": return baseNumeral + "m⁹";
-      case "dominant 9th": return baseNumeral + "⁹";
-      case "suspended 4th": return baseNumeral + "sus4";
-      case "suspended 2nd": return baseNumeral + "sus2";
+      case "major":
+        return baseNumeral;
+      case "minor":
+        return baseNumeral;
+      case "dominant 7th":
+        return baseNumeral + "⁷";
+      case "major 7th":
+        return baseNumeral + "M⁷";
+      case "minor 7th":
+        return baseNumeral + "m⁷";
+      case "diminished":
+        return baseNumeral + "°";
+      case "diminished 7th":
+        return baseNumeral + "°⁷";
+      case "half-diminished 7th":
+        return baseNumeral + "ø⁷";
+      case "augmented":
+        return baseNumeral + "+";
+      case "major 9th":
+        return baseNumeral + "M⁹";
+      case "minor 9th":
+        return baseNumeral + "m⁹";
+      case "dominant 9th":
+        return baseNumeral + "⁹";
+      case "suspended 4th":
+        return baseNumeral + "sus4";
+      case "suspended 2nd":
+        return baseNumeral + "sus2";
       default:
         if (chord.aliases[0]) return baseNumeral + chord.aliases[0];
         return baseNumeral;
@@ -71,9 +85,15 @@ function getAdvancedRomanNumeral(
   // 1. Handle Diatonic Chords
   if (degree > 0 && degree <= 7) {
     let finalRoman = ROMAN_NUMERALS[degree - 1];
-    const diatonicTriads = (keyType === 'major' ? Key.majorKey(keyRoot).triads : Key.minorKey(keyRoot).natural.triads);
+    const diatonicTriads =
+      keyType === "major"
+        ? Key.majorKey(keyRoot).triads
+        : Key.minorKey(keyRoot).natural.triads;
     const diatonicTriad = Chord.get(diatonicTriads[degree - 1]);
-    if (diatonicTriad.quality === "Minor" || diatonicTriad.quality === "Diminished") {
+    if (
+      diatonicTriad.quality === "Minor" ||
+      diatonicTriad.quality === "Diminished"
+    ) {
       finalRoman = finalRoman.toLowerCase();
     }
     return appendSuffix(finalRoman);
@@ -95,16 +115,19 @@ function getAdvancedRomanNumeral(
   // 2b. Borrowed Chords & Neapolitan using interval analysis
   const interval = Interval.distance(keyRoot, chord.tonic);
   const intervalToRomanMap: Record<string, string> = {
-    '2m': '♭II', '3m': '♭III', '5d': '♭V', '6m': '♭VI', '7m': '♭VII'
+    "2m": "♭II",
+    "3m": "♭III",
+    "5d": "♭V",
+    "6m": "♭VI",
+    "7m": "♭VII",
   };
   let baseRoman = intervalToRomanMap[interval];
 
   if (baseRoman) {
     // Neapolitan chord is always major
-    if (baseRoman === '♭II' && chord.quality !== "Major") return "";
-
+    if (baseRoman === "♭II" && chord.quality !== "Major") return "";
     // Most other borrowed chords are minor or diminished
-    if (chord.quality === 'Minor' || chord.quality === 'Diminished') {
+    if (chord.quality === "Minor" || chord.quality === "Diminished") {
       baseRoman = baseRoman.toLowerCase();
     }
     return appendSuffix(baseRoman);
@@ -112,8 +135,6 @@ function getAdvancedRomanNumeral(
 
   return ""; // Fallback for unanalyzable chords
 }
-
-
 
 /**
  * Detects the most likely chord name from a set of notes and returns a standardized symbol.
@@ -131,7 +152,6 @@ function getChordDisplayName(notes: string[]): string {
   const chord = Chord.get(detected[0]);
   return chord.empty ? "" : chord.symbol;
 }
-
 
 /**
  * Finds all major and minor keys that contain a given set of chord notes.
@@ -167,7 +187,6 @@ function findMatchingKeys(chordNotes: string[]): string[] {
   return matchingKeys;
 }
 
-
 function calculateNotesFromTab(tab: string, tuningNotes: string[]): string[] {
   const notes: string[] = [];
   // Assumes tab string is low E to high e (6th string to 1st string)
@@ -175,7 +194,6 @@ function calculateNotesFromTab(tab: string, tuningNotes: string[]): string[] {
     const fret = tab[i];
     // tuningNotes is also low E to high e, so we can use a direct index.
     const openStringNote = tuningNotes[i]?.toUpperCase();
-
     if (fret === "x" || fret === "X" || fret === undefined) {
       notes.push("x");
       continue;
@@ -197,21 +215,45 @@ function calculateNotesFromTab(tab: string, tuningNotes: string[]): string[] {
   return notes;
 }
 
-
 export const ChordBank = (
   savedChords: SerializableChord[],
   savedTunings: SerializableTuning[],
   editingChordId: string | null,
   keyRoot: string,
   keyType: "major" | "minor",
+  chordBankFilterKey: string | null,
+  chordBankFilterTuning: string | null,
 ) => {
   const tuningsMap = new Map(
     savedTunings.map((t) => [t.name, t.notes.split(" ")]),
   );
+
+  // --- FILTERING LOGIC ---
+  const filteredChords = savedChords.filter((chord) => {
+    // Check tuning filter
+    const tuningMatch =
+      !chordBankFilterTuning || chord.tuning === chordBankFilterTuning;
+    if (!tuningMatch) return false;
+
+    // Check key filter
+    if (chordBankFilterKey) {
+      const tuningNotes = tuningsMap.get(chord.tuning);
+      if (!tuningNotes) return false;
+      const notes = calculateNotesFromTab(chord.tab, tuningNotes);
+      const matchingKeys = findMatchingKeys(notes);
+      return matchingKeys.includes(chordBankFilterKey);
+    }
+
+    return true;
+  });
+
   return html`
     <h3 class="text-lg font-medium mb-4 text-zinc-50">Chord Bank</h3>
-    <form
-      @submit=${(e: Event) => {
+
+    <div class="space-y-4 mb-6 p-4 border border-zinc-800 rounded-lg">
+      <h4 class="font-medium text-zinc-300">Add New Chord</h4>
+      <form
+        @submit=${(e: Event) => {
       e.preventDefault();
       const form = e.target as HTMLFormElement;
       const formData = new FormData(form);
@@ -226,6 +268,7 @@ export const ChordBank = (
           input.value.trim() === "" ? "x" : input.value.trim(),
         )
         .join("");
+
       if (name.trim() && tab.length === 6) {
         appActor.send({
           type: "CREATE_CHORD",
@@ -234,56 +277,119 @@ export const ChordBank = (
         form.reset();
       }
     }}
-      class="space-y-4 mb-6"
-    >
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="md:col-span-1">
-          <label for="chord-name" class=${labelClasses}>Chord Name</label>
-          <input
-            id="chord-name"
-            name="chord-name"
-            type="text"
-            class=${baseInputClasses}
-            placeholder="e.g., G Major"
-            required
-          />
-        </div>
-        <div class="md:col-span-2">
-          <label for="chord-tuning" class=${labelClasses}>Tuning</label>
-          <select
-            id="chord-tuning"
-            name="chord-tuning"
-            class="${baseInputClasses}"
-          >
-            ${savedTunings.map(
+        class="space-y-4"
+      >
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="md:col-span-1">
+            <label for="chord-name" class=${labelClasses}>Chord Name</label>
+            <input
+              id="chord-name"
+              name="chord-name"
+              type="text"
+              class=${baseInputClasses}
+              placeholder="e.g., G Major"
+              required
+            />
+          </div>
+          <div class="md:col-span-2">
+            <label for="chord-tuning" class=${labelClasses}>Tuning</label>
+            <select
+              id="chord-tuning"
+              name="chord-tuning"
+              class="${baseInputClasses}"
+            >
+              ${savedTunings.map(
       (tuning) =>
         html`<option .value=${tuning.name}>
-                  ${tuning.name} (${tuning.notes})
+                    ${tuning.name} (${tuning.notes})
+                  </option>`,
+    )}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class=${labelClasses}>Tablature (Strings E A D G B e)</label>
+          <div class="grid grid-cols-6 gap-2">
+            ${[...Array(6)].map(
+      (_, i) => html`<input
+                type="text"
+                name="fret-${i}"
+                class="${baseInputClasses} font-mono text-center"
+                maxlength="2"
+                placeholder="x"
+              />`,
+    )}
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" class=${primaryButtonClasses}>Add Chord</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="space-y-4 mt-6 p-4 border border-zinc-800 rounded-lg">
+      <h4 class="font-medium text-zinc-300">Filter Chords</h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="key-filter" class=${labelClasses}>By Key</label>
+          <select
+            id="key-filter"
+            class="${baseInputClasses}"
+            @change=${(e: Event) => {
+      const value = (e.target as HTMLSelectElement).value;
+      appActor.send({ type: "SET_CHORD_BANK_FILTER", key: value });
+    }}
+          >
+            <option value="" ?selected=${!chordBankFilterKey}>-- All Keys --</option>
+            ${ALL_KEYS.map(
+      (key) =>
+        html`<option .value=${key} ?selected=${key === chordBankFilterKey}
+                  >${key}</option
+                >`,
+    )}
+          </select>
+        </div>
+        <div>
+          <label for="tuning-filter" class=${labelClasses}>By Tuning</label>
+          <select
+            id="tuning-filter"
+            class="${baseInputClasses}"
+            @change=${(e: Event) => {
+      const value = (e.target as HTMLSelectElement).value;
+      appActor.send({
+        type: "SET_CHORD_BANK_FILTER_TUNING",
+        tuning: value,
+      });
+    }}
+          >
+            <option value="" ?selected=${!chordBankFilterTuning}
+              >-- All Tunings --</option
+            >
+            ${savedTunings.map(
+      (tuning) =>
+        html`<option
+                  .value=${tuning.name}
+                  ?selected=${tuning.name === chordBankFilterTuning}
+                >
+                  ${tuning.name}
                 </option>`,
     )}
           </select>
         </div>
       </div>
-      <div>
-        <label class=${labelClasses}>Tablature (Strings E A D G B e)</label>
-        <div class="grid grid-cols-6 gap-2">
-          ${[...Array(6)].map(
-      (_, i) => html`<input
-              type="text"
-              name="fret-${i}"
-              class="${baseInputClasses} font-mono text-center"
-              maxlength="2"
-              placeholder="x"
-            />`,
-    )}
-        </div>
+      <div class="flex justify-end mt-4">
+        <button
+          class=${secondaryButtonClasses}
+          ?disabled=${!chordBankFilterKey && !chordBankFilterTuning}
+          @click=${() => appActor.send({ type: "CLEAR_CHORD_BANK_FILTERS" })}
+        >
+          Clear Filters
+        </button>
       </div>
-      <div class="flex justify-end">
-        <button type="submit" class=${primaryButtonClasses}>Add Chord</button>
-      </div>
-    </form>
-    <div class="space-y-3">
-      ${savedChords.map((chord) => {
+    </div>
+
+    <div class="space-y-3 mt-6">
+      ${filteredChords.map((chord) => {
       if (editingChordId === chord.id) {
         return ChordEditorForm(chord, savedTunings);
       }
@@ -294,12 +400,6 @@ export const ChordBank = (
 
       const matchingKeys = findMatchingKeys(notes);
       const detectedChordName = getChordDisplayName(notes);
-      const romanNumeralInCurrentKey = getAdvancedRomanNumeral(
-        detectedChordName,
-        keyRoot,
-        keyType,
-      );
-
       return html`
           <div class="p-3 bg-zinc-800 rounded">
             <div class="flex items-center justify-between">
@@ -311,7 +411,6 @@ export const ChordBank = (
                       >${detectedChordName}</span
                     >`
           : nothing}
-                
                 <span class="text-sm text-zinc-500"
                   >(${chord.tuning})</span
                 >
@@ -376,14 +475,14 @@ export const ChordBank = (
               type.toLowerCase() as "major" | "minor",
             );
             return html`<span
-                          class="bg-teal-900/50 text-teal-300 text-xs font-mono px-2 py-0.5 rounded-full"
-                          >${key}
-                          ${numeral
+                        class="bg-teal-900/50 text-teal-300 text-xs font-mono px-2 py-0.5 rounded-full"
+                        >${key}
+                        ${numeral
                 ? html`<span class="text-purple-300/80"
-                                >(${numeral})</span
-                              >`
+                              >(${numeral})</span
+                            >`
                 : nothing}</span
-                        >`;
+                      >`;
           })}
                   </div>
                 </div>`
@@ -391,9 +490,11 @@ export const ChordBank = (
           </div>
         `;
     })}
-      ${savedChords.length === 0
+      ${filteredChords.length === 0
       ? html`<p class="text-zinc-500 text-center py-4">
-            No chords saved yet.
+            ${chordBankFilterKey || chordBankFilterTuning
+          ? `No saved chords match the current filters.`
+          : "No chords saved yet."}
           </p>`
       : nothing}
     </div>

@@ -11,8 +11,5 @@ export const PatternEditor = (currentPattern: string) => html`<textarea
       type: "UPDATE_PATTERN",
       value: (e.target as HTMLTextAreaElement).value,
     })}
-  placeholder='[
-  { "time": "0:0", "note": "C4", "duration": "8n" },
-  { "time": "0:0", "note": "E4", "duration": "8n" }
-]'
+  placeholder='[]'
 ></textarea>`;
