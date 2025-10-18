@@ -1,6 +1,6 @@
 // src/components/ChordBank.ts
 import { html, nothing } from "lit-html";
-import { Chord, Key, Note, RomanNumeral, Scale } from "tonal";
+import { Chord, Key, Note, Scale, Interval } from "tonal";
 import type { SerializableChord, SerializableTuning } from "../../types/app";
 import { appActor } from "../client";
 import { ChordEditorForm } from "./ChordEditorForm";
@@ -25,11 +25,12 @@ const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // W, H, W, W, H, W, W
 const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII"];
 
 /**
- * Generates a detailed Roman numeral by analyzing a chord within a key.
- * @param chordSymbol The symbol of the chord to analyze (e.g., "G", "Am", "G7").
+ * Generates a detailed Roman numeral by analyzing a chord within a key,
+ * including diatonic, borrowed, secondary dominant, and other altered chords.
+ * @param chordSymbol The symbol of the chord to analyze (e.g., "G", "Am", "D7").
  * @param keyRoot The root of the key (e.g., "C").
  * @param keyType The type of the key (e.g., "major").
- * @returns The detailed Roman numeral string (e.g., "V", "vi", "V7sus4") or an empty string.
+ * @returns The detailed Roman numeral string (e.g., "V", "vi", "V⁷/V") or an empty string.
  */
 function getAdvancedRomanNumeral(
   chordSymbol: string,
@@ -38,57 +39,80 @@ function getAdvancedRomanNumeral(
 ): string {
   if (!chordSymbol) return "";
   const keyName = `${keyRoot} ${keyType}`;
-  const scaleNotes = Scale.get(keyName).notes;
+  const scale = Scale.get(keyName);
   const chord = Chord.get(chordSymbol);
   if (chord.empty || !chord.tonic) return "";
 
-  const degree = scaleNotes.indexOf(chord.tonic) + 1;
-  if (degree === 0 || degree > 7) return "";
+  const degree = scale.notes.indexOf(chord.tonic) + 1;
 
-  let finalRoman = ROMAN_NUMERALS[degree - 1];
+  // Append extensions and alterations to a base numeral
+  const appendSuffix = (baseNumeral: string) => {
+    switch (chord.type) {
+      case "major": return baseNumeral;
+      case "minor": return baseNumeral;
+      case "dominant 7th": return baseNumeral + "⁷";
+      case "major 7th": return baseNumeral + "M⁷";
+      case "minor 7th": return baseNumeral + "m⁷";
+      case "diminished": return baseNumeral + "°";
+      case "diminished 7th": return baseNumeral + "°⁷";
+      case "half-diminished 7th": return baseNumeral + "ø⁷";
+      case "augmented": return baseNumeral + "+";
+      case "major 9th": return baseNumeral + "M⁹";
+      case "minor 9th": return baseNumeral + "m⁹";
+      case "dominant 9th": return baseNumeral + "⁹";
+      case "suspended 4th": return baseNumeral + "sus4";
+      case "suspended 2nd": return baseNumeral + "sus2";
+      default:
+        if (chord.aliases[0]) return baseNumeral + chord.aliases[0];
+        return baseNumeral;
+    }
+  };
 
-  const diatonicTriads = (keyType === 'major' ? Key.majorKey(keyRoot).triads : Key.minorKey(keyRoot).natural.triads);
-  const diatonicTriad = Chord.get(diatonicTriads[degree - 1]);
-
-  if (diatonicTriad.quality === "Minor" || diatonicTriad.quality === "Diminished") {
-    finalRoman = finalRoman.toLowerCase();
+  // 1. Handle Diatonic Chords
+  if (degree > 0 && degree <= 7) {
+    let finalRoman = ROMAN_NUMERALS[degree - 1];
+    const diatonicTriads = (keyType === 'major' ? Key.majorKey(keyRoot).triads : Key.minorKey(keyRoot).natural.triads);
+    const diatonicTriad = Chord.get(diatonicTriads[degree - 1]);
+    if (diatonicTriad.quality === "Minor" || diatonicTriad.quality === "Diminished") {
+      finalRoman = finalRoman.toLowerCase();
+    }
+    return appendSuffix(finalRoman);
   }
 
-  // Handle chord quality and extensions based on chord.type
-  switch (chord.type) {
-    case "major":
-      return finalRoman;
-    case "minor":
-      return finalRoman;
-    case "dominant 7th":
-      return finalRoman + "⁷";
-    case "major 7th":
-      return finalRoman + "M⁷";
-    case "minor 7th":
-      return finalRoman + "m⁷";
-    case "diminished":
-      return finalRoman + "°";
-    case "diminished 7th":
-      return finalRoman + "°⁷";
-    case "half-diminished 7th":
-      return finalRoman + "ø⁷";
-    case "augmented":
-      return finalRoman + "+";
-    case "augmented 7th":
-      return finalRoman + "+⁷";
-    case "suspended 4th":
-      return finalRoman + "sus4";
-    case "suspended 2nd":
-      return finalRoman + "sus2";
-    case "dominant 7th suspended 4th":
-      return finalRoman + "⁷sus4";
-    default:
-      if (chord.aliases[0]) {
-        return finalRoman + chord.aliases[0];
-      }
-      return finalRoman;
+  // 2. Handle Chromatic / Altered Chords
+  // 2a. Secondary Dominants (e.g., V/V)
+  if (chord.type === "dominant 7th" || chord.type === "major") {
+    // A secondary dominant resolves down a perfect 5th to a diatonic chord.
+    const resolvedTonic = Note.transpose(chord.tonic, "-P5");
+    const targetDegree = scale.notes.indexOf(resolvedTonic) + 1;
+    if (targetDegree > 0 && targetDegree <= 7) {
+      const targetRoman = ROMAN_NUMERALS[targetDegree - 1];
+      const quality = chord.type === "dominant 7th" ? "⁷" : "";
+      return `V${quality}/${targetRoman}`;
+    }
   }
+
+  // 2b. Borrowed Chords & Neapolitan using interval analysis
+  const interval = Interval.distance(keyRoot, chord.tonic);
+  const intervalToRomanMap: Record<string, string> = {
+    '2m': '♭II', '3m': '♭III', '5d': '♭V', '6m': '♭VI', '7m': '♭VII'
+  };
+  let baseRoman = intervalToRomanMap[interval];
+
+  if (baseRoman) {
+    // Neapolitan chord is always major
+    if (baseRoman === '♭II' && chord.quality !== "Major") return "";
+
+    // Most other borrowed chords are minor or diminished
+    if (chord.quality === 'Minor' || chord.quality === 'Diminished') {
+      baseRoman = baseRoman.toLowerCase();
+    }
+    return appendSuffix(baseRoman);
+  }
+
+  return ""; // Fallback for unanalyzable chords
 }
+
 
 
 /**
@@ -196,7 +220,7 @@ export const ChordBank = (
       const tabInputs = Array.from(
         form.querySelectorAll<HTMLInputElement>('input[name^="fret-"]'),
       );
-      // **FIX: Construct tab from low E to high e directly, without reversing**
+      // Construct tab from low E to high e directly
       const tab = tabInputs
         .map((input) =>
           input.value.trim() === "" ? "x" : input.value.trim(),
@@ -287,12 +311,7 @@ export const ChordBank = (
                       >${detectedChordName}</span
                     >`
           : nothing}
-                ${romanNumeralInCurrentKey
-          ? html`<span
-                      class="text-sm text-purple-400 font-mono"
-                      >(${romanNumeralInCurrentKey})</span
-                    >`
-          : nothing}
+                
                 <span class="text-sm text-zinc-500"
                   >(${chord.tuning})</span
                 >
