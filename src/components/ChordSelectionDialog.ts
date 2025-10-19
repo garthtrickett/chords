@@ -4,12 +4,14 @@ import { appActor } from "../client";
 import type { SerializableChord } from "../../types/app";
 import {
   cardClasses,
+  destructiveButtonClasses,
   secondaryButtonClasses,
 } from "./styles";
 
 export const ChordSelectionDialog = (
   paletteChordIds: string[],
   savedChords: SerializableChord[],
+  isSlotFilled: boolean,
 ) => {
   const chordsMap = new Map(savedChords.map((c) => [c.id, c]));
   const chordsInPalette = paletteChordIds
@@ -40,15 +42,36 @@ export const ChordSelectionDialog = (
                 });
               }
             }}
-                >
-                  ${chord.name}
-                </button>`,
+                  >
+                    ${chord.name}
+                  </button>`,
       )}
           </div>`
       : html`<p class="text-zinc-400 text-center py-4">
             No chords in your palette. Go to the Chord Bank to add some.
           </p>`}
-      <div class="mt-6 flex justify-end">
+      <div class="mt-6 flex justify-between items-center">
+        <div>
+          ${isSlotFilled
+      ? html`<button
+                class=${destructiveButtonClasses}
+                @click=${() => {
+          const snapshot = appActor.getSnapshot();
+          const { activeSlot } = snapshot.context;
+          if (activeSlot) {
+            appActor.send({
+              type: "CLEAR_SLOT",
+              sectionId: activeSlot.sectionId,
+              measureId: activeSlot.measureId,
+              slotIndex: activeSlot.slotIndex,
+            });
+          }
+        }}
+              >
+                Remove Chord
+              </button>`
+      : nothing}
+        </div>
         <button
           class=${secondaryButtonClasses}
           @click=${() => appActor.send({ type: "CANCEL_CHORD_SELECTION" })}

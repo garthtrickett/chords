@@ -75,6 +75,7 @@ export const createPatternEffect = (input: {
   notes: string;
   key_root: string;
   key_type: string;
+  chord_palette: string;
 }) =>
   Effect.promise(() => client.patterns.post(input)).pipe(
     Effect.flatMap((response) => {
@@ -98,10 +99,17 @@ export const updatePatternEffect = (input: {
   content: string;
   key_root: string;
   key_type: string;
+  chord_palette: string;
 }) => {
-  const { id, name, content, key_root, key_type } = input;
+  const { id, name, content, key_root, key_type, chord_palette } = input;
   return Effect.promise(() =>
-    client.patterns({ id }).put({ name, notes: content, key_root, key_type }),
+    client.patterns({ id }).put({
+      name,
+      notes: content,
+      key_root,
+      key_type,
+      chord_palette,
+    }),
   ).pipe(
     Effect.flatMap((response) => {
       if (response && response.error) {

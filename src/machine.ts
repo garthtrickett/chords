@@ -9,7 +9,6 @@ import type {
   PatternSection,
   Measure,
 } from "../types/app";
-
 // 1. CONTEXT (State)
 export interface AppContext {
   savedPatterns: SerializablePattern[];
@@ -45,6 +44,7 @@ export type AppEvent =
   | { type: "UPDATE_SECTION_TIME_SIGNATURE"; sectionId: string; timeSignature: string }
   | { type: "DELETE_SECTION"; sectionId: string }
   | { type: "SELECT_SLOT"; sectionId: string; measureId: string; slotIndex: number }
+  | { type: "CLEAR_SLOT"; sectionId: string; measureId: string; slotIndex: number }
   | { type: "CLEAR_SLOT_SELECTION" }
   | { type: "TOGGLE_CHORD_IN_PALETTE"; chordId: string }
   | { type: "ASSIGN_CHORD_TO_SLOT"; chordId: string }
@@ -63,6 +63,7 @@ export type AppEvent =
       content: string;
       key_root: string;
       key_type: string;
+      chord_palette: string;
     };
   }
   | { type: "DELETE_PATTERN"; id: string }
@@ -141,7 +142,6 @@ const safeParsePattern = (notesJson: string): PatternSection[] => {
     return [];
   }
 };
-
 const getSlotsForTimeSignature = (timeSignature: string): number => {
   const [beats, beatType] = timeSignature.split("/").map(Number);
   if (beatType === 8) {
@@ -161,11 +161,18 @@ export const appMachine = setup({
     }>,
     createPattern: {} as PromiseActorLogic<
       SerializablePattern,
-      { name: string; notes: string; key_root: string; key_type: string }
+      { name: string; notes: string; key_root: string; key_type: string; chord_palette: string }
     >,
     updatePattern: {} as PromiseActorLogic<
       void,
-      { id: string; name: string; content: string; key_root: string; key_type: string }
+      {
+        id: string;
+        name: string;
+        content: string;
+        key_root: string;
+        key_type: string;
+        chord_palette: string;
+      }
     >,
     deletePattern: {} as PromiseActorLogic<void, { id: string }>,
     createChord: {} as PromiseActorLogic<
@@ -240,6 +247,19 @@ export const appMachine = setup({
               event.output.patterns.length > 0
                 ? (event.output.patterns[0].key_type as "major" | "minor")
                 : "major",
+            chordPalette: ({ event }) => {
+              if (event.output.patterns.length > 0) {
+                try {
+                  const palette = JSON.parse(
+                    event.output.patterns[0].chord_palette,
+                  );
+                  return Array.isArray(palette) ? palette : [];
+                } catch (e) {
+                  return [];
+                }
+              }
+              return [];
+            },
           }),
         },
         onError: {
@@ -309,6 +329,7 @@ export const appMachine = setup({
                           notes: JSON.stringify(defaultPattern),
                           key_root: context.keyRoot,
                           key_type: context.keyType,
+                          chord_palette: JSON.stringify(context.chordPalette),
                         };
                       throw new Error("Invalid event for actor");
                     },
@@ -322,6 +343,7 @@ export const appMachine = setup({
                         keyRoot: ({ event }) => event.output.key_root,
                         keyType: ({ event }) =>
                           event.output.key_type as "major" | "minor",
+                        chordPalette: [],
                       }),
                     },
                     onError: {
@@ -555,7 +577,6 @@ export const appMachine = setup({
                   currentPattern: ({ context, event }) => {
                     const { activeSlot } = context;
                     if (!activeSlot) return context.currentPattern;
-
                     return context.currentPattern.map((section) => {
                       if (section.id === activeSlot.sectionId) {
                         return {
@@ -564,6 +585,32 @@ export const appMachine = setup({
                             if (measure.id === activeSlot.measureId) {
                               const newSlots = [...measure.slots];
                               newSlots[activeSlot.slotIndex] = event.chordId;
+                              return { ...measure, slots: newSlots };
+                            }
+                            return measure;
+                          }),
+                        };
+                      }
+                      return section;
+                    });
+                  },
+                }),
+                assign({ activeSlot: null }),
+              ],
+            },
+            CLEAR_SLOT: {
+              target: "editing",
+              actions: [
+                assign({
+                  currentPattern: ({ context, event }) => {
+                    return context.currentPattern.map((section) => {
+                      if (section.id === event.sectionId) {
+                        return {
+                          ...section,
+                          measures: section.measures.map((measure) => {
+                            if (measure.id === event.measureId) {
+                              const newSlots = [...measure.slots];
+                              newSlots[event.slotIndex] = null;
                               return { ...measure, slots: newSlots };
                             }
                             return measure;
@@ -655,6 +702,30 @@ export const appMachine = setup({
         activeSlot: null,
       }),
     },
+    CLEAR_SLOT: {
+      actions: [
+        assign({
+          currentPattern: ({ context, event }) => {
+            return context.currentPattern.map((section) => {
+              if (section.id === event.sectionId) {
+                return {
+                  ...section,
+                  measures: section.measures.map((measure) => {
+                    if (measure.id === event.measureId) {
+                      const newSlots = [...measure.slots];
+                      newSlots[event.slotIndex] = null;
+                      return { ...measure, slots: newSlots };
+                    }
+                    return measure;
+                  }),
+                };
+              }
+              return section;
+            });
+          },
+        }),
+      ],
+    },
     CLEAR_SLOT_SELECTION: {
       actions: assign({ activeSlot: null }),
     },
@@ -698,6 +769,18 @@ export const appMachine = setup({
           return selected
             ? (selected.key_type as "major" | "minor")
             : context.keyType;
+        },
+        chordPalette: ({ context, event }) => {
+          const selected = context.savedPatterns.find((p) => p.id === event.id);
+          if (selected) {
+            try {
+              const palette = JSON.parse(selected.chord_palette);
+              return Array.isArray(palette) ? palette : [];
+            } catch (e) {
+              return [];
+            }
+          }
+          return context.chordPalette;
         },
         activeSlot: null,
       }),

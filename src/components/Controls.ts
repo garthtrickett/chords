@@ -139,6 +139,7 @@ export const Controls = (props: {
               content: JSON.stringify(latest.context.currentPattern),
               key_root: latest.context.keyRoot,
               key_type: latest.context.keyType,
+              chord_palette: JSON.stringify(latest.context.chordPalette),
             },
           });
         }

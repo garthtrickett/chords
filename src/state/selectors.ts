@@ -32,9 +32,30 @@ export const selectViewMode = (s: AppSnapshot) =>
 export const selectActiveSlot = (s: AppSnapshot) => s.context.activeSlot;
 export const selectChordPalette = (s: AppSnapshot) => s.context.chordPalette;
 
+export const selectIsActiveSlotFilled = (s: AppSnapshot): boolean => {
+  const { activeSlot, currentPattern } = s.context;
+  if (!activeSlot) {
+    return false;
+  }
+
+  const section = currentPattern.find((sec) => sec.id === activeSlot.sectionId);
+  if (!section) {
+    return false;
+  }
+
+  const measure = section.measures.find(
+    (meas) => meas.id === activeSlot.measureId,
+  );
+  if (!measure) {
+    return false;
+  }
+
+  const slotValue = measure.slots[activeSlot.slotIndex];
+  return slotValue !== null && slotValue !== undefined;
+};
+
 // Selector for the instrument
 export const selectInstrument = (s: AppSnapshot) => s.context.instrument;
-
 // Selectors for the musical key context
 export const selectKeyRoot = (s: AppSnapshot) => s.context.keyRoot;
 export const selectKeyType = (s: AppSnapshot) => s.context.keyType;

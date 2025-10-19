@@ -171,6 +171,7 @@ const runApplication = () => {
       modalContent = ChordSelectionDialog(
         selectors.selectChordPalette(snapshot),
         selectors.selectSavedChords(snapshot),
+        selectors.selectIsActiveSlotFilled(snapshot),
       );
     }
     render(modalContent, modalContainer);

@@ -344,18 +344,23 @@ export const ChordBank = (
           <div class="p-3 bg-zinc-800 rounded">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-4">
-                <input
-                  type="checkbox"
-                  id="palette-toggle-${chord.id}"
-                  class="h-4 w-4 rounded border-zinc-600 bg-zinc-700 text-teal-500 focus:ring-teal-600"
-                  .checked=${isSelected}
-                  @change=${() =>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="palette-toggle-${chord.id}"
+                    class="sr-only peer"
+                    .checked=${isSelected}
+                    @change=${() =>
           appActor.send({
             type: "TOGGLE_CHORD_IN_PALETTE",
             chordId: chord.id as string,
           })}
-                />
-                <label for="palette-toggle-${chord.id}" class="flex items-baseline gap-2 cursor-pointer">
+                  />
+                  <div
+                    class="w-11 h-6 bg-zinc-700 rounded-full peer peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"
+                  ></div>
+                </label>
+                <div class="flex items-baseline gap-2">
                   <span class="font-semibold text-zinc-300">${chord.name}</span>
                   ${detectedChordName
           ? html`<span
@@ -366,7 +371,7 @@ export const ChordBank = (
                   <span class="text-sm text-zinc-500"
                     >(${chord.tuning})</span
                   >
-                </label>
+                </div>
               </div>
               <div class="flex items-center gap-4">
                 <div class="font-mono text-cyan-400 flex gap-x-2 text-lg">

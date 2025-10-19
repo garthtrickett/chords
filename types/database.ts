@@ -13,6 +13,7 @@ export interface Chord {
 }
 
 export interface Pattern {
+  chord_palette: Generated<string>;
   created_at: Generated<string>;
   id: string | null;
   key_root: Generated<string>;

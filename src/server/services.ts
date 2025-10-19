@@ -51,6 +51,7 @@ export const updatePattern = (
     notes: string;
     key_root: string;
     key_type: string;
+    chord_palette: string;
   },
 ) =>
   Effect.tryPromise({

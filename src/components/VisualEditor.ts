@@ -11,11 +11,9 @@ import {
   destructiveButtonClasses,
   secondaryButtonClasses,
 } from "./styles";
-
 const TIME_SIGNATURES = [
   "2/4", "3/4", "4/4", "5/4", "6/8", "7/8", "9/8", "11/8", "12/8", "13/8", "15/8",
 ];
-
 const renderSlot = (
   sectionId: string,
   measure: Measure,
@@ -29,16 +27,14 @@ const renderSlot = (
     activeSlot?.sectionId === sectionId &&
     activeSlot?.measureId === measure.id &&
     activeSlot?.slotIndex === slotIndex;
-
   const slotClasses = `
-    relative flex items-center justify-center rounded text-center border h-12 text-xs
+    relative group flex items-center justify-center rounded text-center border h-12 text-xs min-w-16
     ${isActive
       ? "bg-teal-400/20 border-teal-400"
       : "bg-zinc-700/50 border-zinc-600 hover:border-zinc-400"
     }
     cursor-pointer transition-colors
   `;
-
   return html`
     <div
       class=${slotClasses}
@@ -51,7 +47,23 @@ const renderSlot = (
       })}
     >
       ${chord
-      ? html`<span class="font-medium text-zinc-200">${chord.name}</span>`
+      ? html`
+            <span class="font-medium text-zinc-200">${chord.name}</span>
+            <button
+              class="absolute top-0 right-0 w-4 h-4 flex items-center justify-center bg-red-500/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              @click=${(e: Event) => {
+          e.stopPropagation(); // Prevent the modal from opening
+          appActor.send({
+            type: "CLEAR_SLOT",
+            sectionId,
+            measureId: measure.id,
+            slotIndex,
+          });
+        }}
+            >
+              &times;
+            </button>
+          `
       : html`<span class="text-zinc-600">+</span>`}
     </div>
   `;
@@ -68,7 +80,6 @@ const renderMeasure = (
   const beatSlots = Array.from({ length: beats }, (_, i) =>
     measure.slots.slice(i * subdivisions, (i + 1) * subdivisions),
   );
-
   return html`
     <div class="bg-zinc-800 p-2 rounded-md flex-shrink-0">
       <div
@@ -149,7 +160,6 @@ const renderSection = (
     </div>
   </div>
 `;
-
 export const VisualEditor = (
   currentPattern: PatternSection[],
   savedChords: SerializableChord[],
