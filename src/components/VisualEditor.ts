@@ -1,5 +1,5 @@
 // src/components/VisualEditor.ts
-import { html } from "lit-html";
+import { html, nothing } from "lit-html";
 import { appActor } from "../client";
 import type {
   PatternSection,
@@ -40,19 +40,37 @@ const renderSlot = (
       class=${slotClasses}
       @click=${() =>
       appActor.send({
-        type: "SELECT_SLOT",
+        type: "HIGHLIGHT_SLOT",
         sectionId,
         measureId: measure.id,
         slotIndex,
       })}
     >
       ${chord
+      ? html`<span class="font-medium text-zinc-200">${chord.name}</span>`
+      : html`<span class="text-zinc-600">+</span>`}
+
+      <button
+        class="absolute top-0 left-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-teal-600 text-white rounded-br-lg opacity-0 group-hover:opacity-100 transition-all text-xs font-bold"
+        @click=${(e: Event) => {
+      e.stopPropagation();
+      appActor.send({
+        type: "SELECT_SLOT",
+        sectionId,
+        measureId: measure.id,
+        slotIndex,
+      });
+    }}
+      >
+        ${chord ? "✎" : "+"}
+      </button>
+
+      ${chord
       ? html`
-            <span class="font-medium text-zinc-200">${chord.name}</span>
             <button
-              class="absolute top-0 right-0 w-4 h-4 flex items-center justify-center bg-red-500/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              class="absolute top-0 right-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-red-600 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-all text-sm"
               @click=${(e: Event) => {
-          e.stopPropagation(); // Prevent the modal from opening
+          e.stopPropagation();
           appActor.send({
             type: "CLEAR_SLOT",
             sectionId,
@@ -64,7 +82,7 @@ const renderSlot = (
               &times;
             </button>
           `
-      : html`<span class="text-zinc-600">+</span>`}
+      : nothing}
     </div>
   `;
 };

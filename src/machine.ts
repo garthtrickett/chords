@@ -44,6 +44,7 @@ export type AppEvent =
   | { type: "UPDATE_SECTION_TIME_SIGNATURE"; sectionId: string; timeSignature: string }
   | { type: "DELETE_SECTION"; sectionId: string }
   | { type: "SELECT_SLOT"; sectionId: string; measureId: string; slotIndex: number }
+  | { type: "HIGHLIGHT_SLOT"; sectionId: string; measureId: string; slotIndex: number }
   | { type: "CLEAR_SLOT"; sectionId: string; measureId: string; slotIndex: number }
   | { type: "CLEAR_SLOT_SELECTION" }
   | { type: "TOGGLE_CHORD_IN_PALETTE"; chordId: string }
@@ -700,6 +701,15 @@ export const appMachine = setup({
             return section;
           }),
         activeSlot: null,
+      }),
+    },
+    HIGHLIGHT_SLOT: {
+      actions: assign({
+        activeSlot: ({ event }) => ({
+          sectionId: event.sectionId,
+          measureId: event.measureId,
+          slotIndex: event.slotIndex,
+        }),
       }),
     },
     CLEAR_SLOT: {
