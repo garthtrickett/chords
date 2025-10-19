@@ -7,7 +7,8 @@ export const selectIsAudioOn = (s: AppSnapshot) =>
   s.matches({ running: { editing: { audio: "on" } } });
 export const selectIsSaving = (s: AppSnapshot) =>
   !s.matches({ running: { editing: { saveStatus: "idle" } } });
-export const selectCurrentPattern = (s: AppSnapshot) => s.context.currentPattern;
+export const selectCurrentPatternAsJson = (s: AppSnapshot) =>
+  s.context.currentPattern;
 export const selectPatternName = (s: AppSnapshot) => s.context.patternName;
 export const selectSavedPatterns = (s: AppSnapshot) => s.context.savedPatterns;
 export const selectSavedChords = (s: AppSnapshot) => s.context.savedChords;

@@ -1,10 +1,13 @@
 // src/machine.ts
 import { setup, assign, type PromiseActorLogic } from "xstate";
+import { nanoid } from "nanoid";
 import type {
   SerializablePattern,
   SerializableChord,
   SerializableTuning,
   NoteEvent,
+  PatternSection,
+  Measure,
 } from "../types/app";
 
 // 1. CONTEXT (State)
@@ -12,7 +15,7 @@ export interface AppContext {
   savedPatterns: SerializablePattern[];
   savedChords: SerializableChord[];
   savedTunings: SerializableTuning[];
-  currentPattern: string;
+  currentPattern: PatternSection[];
   patternName: string;
   selectedPatternId: string | null;
   errorMessage: string | null;
@@ -30,7 +33,10 @@ export interface AppContext {
 export type AppEvent =
   | { type: "START_AUDIO" }
   | { type: "STOP_AUDIO" }
-  | { type: "UPDATE_PATTERN"; value: string }
+  | { type: "UPDATE_PATTERN_STRUCTURE"; value: PatternSection[] }
+  | { type: "ADD_SECTION" }
+  | { type: "UPDATE_SECTION_TIME_SIGNATURE"; sectionId: string; timeSignature: string }
+  | { type: "DELETE_SECTION"; sectionId: string }
   | { type: "UPDATE_PATTERN_NAME"; value: string }
   | { type: "SELECT_PATTERN"; id: string }
   | { type: "NEW_PATTERN" }
@@ -101,34 +107,35 @@ export type AppEvent =
   | { type: "error.platform.deleteTuning"; error: unknown };
 
 // 3. CONSTANTS
-const defaultPattern = JSON.stringify([], null, 2);
+const defaultPattern: PatternSection[] = [];
 const getErrorMessage = (error: unknown): string => {
   if (typeof error === "object" && error !== null && "message" in error)
     return String(error.message);
   return "An unexpected error occurred.";
 };
 
+const safeParsePattern = (notesJson: string): PatternSection[] => {
+  try {
+    const parsed = JSON.parse(notesJson);
+    if (Array.isArray(parsed)) {
+      // Basic validation: check if it looks like our section structure
+      if (parsed.every((p) => p.id && p.timeSignature && p.measures)) {
+        return parsed;
+      }
+    }
+    return []; // Return empty if not valid structure
+  } catch (e) {
+    return []; // Return empty for invalid JSON
+  }
+};
+
 // --- HELPERS for chord logic ---
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const NOTE_MAP: Record<string, number> = {
-  "C": 0,
-  "C#": 1,
-  "Db": 1,
-  "D": 2,
-  "D#": 3,
-  "Eb": 3,
-  "E": 4,
-  "F": 5,
-  "F#": 6,
-  "Gb": 6,
-  "G": 7,
-  "G#": 8,
-  "Ab": 8,
-  "A": 9,
-  "A#": 10,
-  "Bb": 10,
-  "B": 11,
+  "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6,
+  "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
 };
+
 function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
   const notes: string[] = [];
   for (let i = 0; i < 6; i++) {
@@ -224,7 +231,7 @@ export const appMachine = setup({
             savedTunings: ({ event }) => event.output.tunings,
             currentPattern: ({ event }) =>
               event.output.patterns.length > 0
-                ? event.output.patterns[0].notes
+                ? safeParsePattern(event.output.patterns[0].notes)
                 : defaultPattern,
             patternName: ({ event }) =>
               event.output.patterns.length > 0
@@ -308,7 +315,7 @@ export const appMachine = setup({
                       if (event.type === "CREATE_PATTERN")
                         return {
                           name: event.name,
-                          notes: defaultPattern,
+                          notes: JSON.stringify(defaultPattern),
                           key_root: context.keyRoot,
                           key_type: context.keyType,
                         };
@@ -319,7 +326,8 @@ export const appMachine = setup({
                       actions: assign({
                         selectedPatternId: ({ event }) => event.output.id,
                         patternName: ({ event }) => event.output.name,
-                        currentPattern: ({ event }) => event.output.notes,
+                        currentPattern: ({ event }) =>
+                          safeParsePattern(event.output.notes),
                         keyRoot: ({ event }) => event.output.key_root,
                         keyType: ({ event }) =>
                           event.output.key_type as "major" | "minor",
@@ -543,8 +551,38 @@ export const appMachine = setup({
     },
   },
   on: {
-    UPDATE_PATTERN: {
+    UPDATE_PATTERN_STRUCTURE: {
       actions: assign({ currentPattern: ({ event }) => event.value }),
+    },
+    ADD_SECTION: {
+      actions: assign({
+        currentPattern: ({ context }) => [
+          ...context.currentPattern,
+          {
+            id: nanoid(),
+            timeSignature: "4/4",
+            measures: [{ id: nanoid(), notes: [] }],
+          },
+        ],
+      }),
+    },
+    DELETE_SECTION: {
+      actions: assign({
+        currentPattern: ({ context, event }) =>
+          context.currentPattern.filter(
+            (section) => section.id !== event.sectionId,
+          ),
+      }),
+    },
+    UPDATE_SECTION_TIME_SIGNATURE: {
+      actions: assign({
+        currentPattern: ({ context, event }) =>
+          context.currentPattern.map((section) =>
+            section.id === event.sectionId
+              ? { ...section, timeSignature: event.timeSignature }
+              : section,
+          ),
+      }),
     },
     UPDATE_PATTERN_NAME: {
       actions: assign({ patternName: ({ event }) => event.value }),
@@ -556,7 +594,9 @@ export const appMachine = setup({
       actions: assign({
         currentPattern: ({ context, event }) => {
           const selected = context.savedPatterns.find((p) => p.id === event.id);
-          return selected ? selected.notes : context.currentPattern;
+          return selected
+            ? safeParsePattern(selected.notes)
+            : context.currentPattern;
         },
         patternName: ({ context, event }) => {
           const selected = context.savedPatterns.find((p) => p.id === event.id);
@@ -591,7 +631,9 @@ export const appMachine = setup({
       actions: assign({
         currentPattern: ({ context, event }) => {
           const chord = context.savedChords.find((c) => c.id === event.chordId);
-          if (!chord) return context.currentPattern;
+          if (!chord || context.currentPattern.length === 0) {
+            return context.currentPattern;
+          }
 
           const tuning = context.savedTunings.find(
             (t) => t.name === chord.tuning,
@@ -603,33 +645,34 @@ export const appMachine = setup({
             (n) => n !== "x" && n !== "?",
           );
 
-          let existingPattern: NoteEvent[] = [];
-          try {
-            const parsed = JSON.parse(context.currentPattern);
-            if (Array.isArray(parsed)) existingPattern = parsed;
-          } catch (e) {
-            // Start with an empty pattern if current one is invalid
+          const newNoteEvents: NoteEvent[] = chordNotes.map((noteName) => ({
+            time: "0:0", // Default to the start of the measure
+            note: `${noteName}4`,
+            duration: "4n",
+          }));
+
+          const lastSection =
+            context.currentPattern[context.currentPattern.length - 1];
+          const lastMeasure = lastSection.measures[lastSection.measures.length - 1];
+
+          let updatedLastSection;
+          // If the last measure is empty, replace its notes. Otherwise, add a new measure.
+          if (lastMeasure && lastMeasure.notes.length === 0) {
+            const updatedMeasures = lastSection.measures.map((m: Measure) =>
+              m.id === lastMeasure.id ? { ...m, notes: newNoteEvents } : m,
+            );
+            updatedLastSection = { ...lastSection, measures: updatedMeasures };
+          } else {
+            const newMeasure = { id: nanoid(), notes: newNoteEvents };
+            updatedLastSection = {
+              ...lastSection,
+              measures: [...lastSection.measures, newMeasure],
+            };
           }
 
-          let maxBar = -1;
-          existingPattern.forEach((note) => {
-            if (typeof note.time === "string") {
-              const match = note.time.match(/^(\d+):/);
-              if (match) {
-                const bar = parseInt(match[1], 10);
-                if (bar > maxBar) maxBar = bar;
-              }
-            }
-          });
-          const newTime = `${maxBar + 1}:0`;
-
-          const newNoteEvents: NoteEvent[] = chordNotes.map((noteName) => ({
-            time: newTime,
-            note: `${noteName}4`, // Add default octave 4
-            duration: "4n", // Default to a quarter note
-          }));
-          const updatedPattern = [...existingPattern, ...newNoteEvents];
-          return JSON.stringify(updatedPattern, null, 2);
+          return context.currentPattern.map((s) =>
+            s.id === lastSection.id ? updatedLastSection : s,
+          );
         },
       }),
     },

@@ -80,9 +80,7 @@ const runApplication = () => {
   // Create and start the actor
   appActor = createActor(machineWithImplementations).start();
   // Initialize the audio player
-  player.initializePlayer(
-    player.parseCode(appActor.getSnapshot().context.currentPattern),
-  );
+  player.initializePlayer();
 
   // --- MAIN SUBSCRIPTION LOOP ---
   appActor.subscribe((snapshot) => {
@@ -100,9 +98,9 @@ const runApplication = () => {
       const viewMode = selectors.selectViewMode(snapshot);
       render(
         viewMode === "json"
-          ? PatternEditor(selectors.selectCurrentPattern(snapshot))
+          ? PatternEditor(selectors.selectCurrentPatternAsJson(snapshot))
           : VisualEditor(
-            selectors.selectCurrentPattern(snapshot),
+            selectors.selectCurrentPatternAsJson(snapshot),
             selectors.selectNotesInCurrentKey(snapshot),
           ),
         editorContainer,
@@ -172,10 +170,13 @@ const runApplication = () => {
     // --- Audio Side-Effects ---
     player.toggleAudio(selectors.selectIsAudioOn(snapshot));
 
-    const currentPatternString = selectors.selectCurrentPattern(snapshot);
+    const currentPatternString = JSON.stringify(
+      selectors.selectCurrentPatternAsJson(snapshot),
+    );
     if (currentPatternString !== lastScheduledPattern) {
-      const newNotes = player.parseCode(currentPatternString);
-      player.updatePart(newNotes);
+      player.updateTransportSchedule(
+        selectors.selectCurrentPatternAsJson(snapshot),
+      );
       lastScheduledPattern = currentPatternString;
     }
   });

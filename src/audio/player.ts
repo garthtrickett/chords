@@ -1,19 +1,16 @@
 // src/audio/player.ts
 import {
   getTransport,
-  Part,
   start as startAudio,
   Sampler,
+  Time,
 } from "tone";
-import type { NoteEvent } from "../../types/app";
+import type { NoteEvent, PatternSection } from "../../types/app";
 
 // --- TONE.JS SETUP ---
 const pianoSampler = new Sampler({
   urls: {
-    C4: "C4.mp3",
-    "D#4": "Ds4.mp3",
-    "F#4": "Fs4.mp3",
-    A4: "A4.mp3",
+    C4: "C4.mp3", "D#4": "Ds4.mp3", "F#4": "Fs4.mp3", A4: "A4.mp3",
   },
   release: 1,
   baseUrl: "https://tonejs.github.io/audio/salamander/",
@@ -21,12 +18,8 @@ const pianoSampler = new Sampler({
 
 const guitarSampler = new Sampler({
   urls: {
-    E2: "guitar_LowEstring1.mp3",
-    A2: "guitar_Astring.mp3",
-    D3: "guitar_Dstring.mp3",
-    G3: "guitar_Gstring.mp3",
-    B3: "guitar_Bstring.mp3",
-    E4: "guitar_highEstring.mp3",
+    E2: "guitar_LowEstring1.mp3", A2: "guitar_Astring.mp3", D3: "guitar_Dstring.mp3",
+    G3: "guitar_Gstring.mp3", B3: "guitar_Bstring.mp3", E4: "guitar_highEstring.mp3",
   },
   release: 1,
   baseUrl: "https://tonejs.github.io/audio/berklee/",
@@ -34,15 +27,15 @@ const guitarSampler = new Sampler({
 
 let activeSynth: Sampler = pianoSampler; // Default to piano
 const transport = getTransport();
-let part: Part<NoteEvent & { index: number }>;
+let scheduledEventIds: number[] = [];
 
 // --- UTILITIES ---
-export function parseCode(code: string): NoteEvent[] {
+export function parseCode(code: string | PatternSection[]): PatternSection[] {
+  if (Array.isArray(code)) return code; // Already in the correct format
   try {
     const parsed = JSON.parse(code);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    // Return empty array for invalid JSON, allowing the app to continue running.
     return [];
   }
 }
@@ -56,37 +49,47 @@ export function setInstrument(instrument: "piano" | "guitar") {
   }
 }
 
-export function initializePlayer(initialNotes: NoteEvent[]) {
-  part = new Part<NoteEvent & { index: number }>((time, value) => {
-    // Schedule the note to be played by the synth
-    if (activeSynth.loaded) {
-      activeSynth.triggerAttackRelease(value.note, value.duration, time);
-    }
-
-    // Visual feedback: highlight the currently playing note element
-    const el = document.getElementById(`note-${value.index}`);
-    if (el) {
-      el.classList.add("highlight");
-      // Remove the highlight after a short delay
-      setTimeout(() => {
-        el.classList.remove("highlight");
-      }, 150);
-    }
-  }, []).start(0);
-
-  part.loop = true;
-  part.loopEnd = "64m"; // Set a long loop duration
-
-  updatePart(initialNotes);
+export function initializePlayer() {
+  transport.loop = true;
+  transport.loopStart = 0;
+  transport.loopEnd = "1m";
 }
 
-export function updatePart(notes: NoteEvent[]) {
-  if (!part) return;
-  part.clear();
-  const indexedNotes = notes.map((note, index) => ({ ...note, index }));
-  indexedNotes.forEach((noteEvent) => {
-    part.add(noteEvent);
+export function updateTransportSchedule(pattern: PatternSection[]) {
+  // Clear previous events
+  scheduledEventIds.forEach((id) => transport.clear(id));
+  scheduledEventIds = [];
+
+  let accumulatedTime = 0; // Use seconds for absolute timing
+
+  pattern.forEach((section) => {
+    // Temporarily set time signature to calculate measure duration accurately
+    const [beats, beatType] = section.timeSignature.split("/").map(Number);
+    transport.timeSignature = [beats, beatType];
+    const measureDuration = Time("1m").toSeconds();
+
+    section.measures.forEach((measure) => {
+      measure.notes.forEach((note) => {
+        const eventId = transport.schedule((time) => {
+          if (activeSynth.loaded) {
+            activeSynth.triggerAttackRelease(note.note, note.duration, time);
+          }
+        }, accumulatedTime + Time(note.time).toSeconds());
+        scheduledEventIds.push(eventId);
+      });
+      // Increment total time by the calculated duration of one measure
+      accumulatedTime += measureDuration;
+    });
   });
+
+  if (pattern.length > 0 && accumulatedTime > 0) {
+    transport.loopEnd = accumulatedTime;
+    // Reset time signature to the first section for consistent default timing
+    const [beats, beatType] = pattern[0].timeSignature.split("/").map(Number);
+    transport.timeSignature = [beats, beatType];
+  } else {
+    transport.loopEnd = "1m"; // Default loop if empty
+  }
 }
 
 export function toggleAudio(isOn: boolean) {
@@ -100,13 +103,3 @@ export function toggleAudio(isOn: boolean) {
     }
   }
 }
-
-// --- DYNAMIC STYLES for highlighting notes ---
-const style = document.createElement("style");
-style.textContent = `
-  .highlight {
-    background-color: rgba(20, 184, 166, 0.3); /* Corresponds to Tailwind's bg-teal-400/30 */
-    border-color: rgb(20 184, 166); /* Corresponds to Tailwind's border-teal-400 */
-  }
-`;
-document.head.appendChild(style);

@@ -136,7 +136,7 @@ export const Controls = (props: {
             input: {
               id: latest.context.selectedPatternId,
               name: latest.context.patternName,
-              content: latest.context.currentPattern,
+              content: JSON.stringify(latest.context.currentPattern),
               key_root: latest.context.keyRoot,
               key_type: latest.context.keyType,
             },
