@@ -5,6 +5,7 @@ import type {
   SerializablePattern,
   SerializableChord,
   SerializableTuning,
+  NoteEvent,
   PatternSection,
   Measure,
 } from "../types/app";
@@ -58,6 +59,11 @@ export type AppEvent =
   | { type: "CREATE_PATTERN"; name: string }
   | { type: "COPY_SLOT" }
   | { type: "PASTE_SLOT" }
+  | {
+    type: "MOVE_CHORD";
+    source: { sectionId: string; measureId: string; slotIndex: number };
+    target: { sectionId: string; measureId: string; slotIndex: number };
+  }
   | {
     type: "UPDATE_SAVED_PATTERN";
     input: {
@@ -704,6 +710,47 @@ export const appMachine = setup({
             return section;
           }),
         activeSlot: null,
+      }),
+    },
+    MOVE_CHORD: {
+      actions: assign({
+        currentPattern: ({ context, event }) => {
+          const { source, target } = event;
+          const { currentPattern } = context;
+
+          const sourceSection = currentPattern.find(
+            (s) => s.id === source.sectionId,
+          );
+          if (!sourceSection) return currentPattern;
+          const sourceMeasure = sourceSection.measures.find(
+            (m) => m.id === source.measureId,
+          );
+          if (!sourceMeasure) return currentPattern;
+          const chordIdToMove = sourceMeasure.slots[source.slotIndex];
+
+          if (chordIdToMove === null || chordIdToMove === undefined)
+            return currentPattern;
+
+          const newPattern = JSON.parse(JSON.stringify(currentPattern));
+
+          const newSourceSection = newPattern.find(
+            (s: PatternSection) => s.id === source.sectionId,
+          );
+          const newSourceMeasure = newSourceSection.measures.find(
+            (m: Measure) => m.id === source.measureId,
+          );
+          newSourceMeasure.slots[source.slotIndex] = null;
+
+          const newTargetSection = newPattern.find(
+            (s: PatternSection) => s.id === target.sectionId,
+          );
+          const newTargetMeasure = newTargetSection.measures.find(
+            (m: Measure) => m.id === target.measureId,
+          );
+          newTargetMeasure.slots[target.slotIndex] = chordIdToMove;
+
+          return newPattern;
+        },
       }),
     },
     HIGHLIGHT_SLOT: {
