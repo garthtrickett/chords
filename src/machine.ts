@@ -5,7 +5,6 @@ import type {
   SerializablePattern,
   SerializableChord,
   SerializableTuning,
-  NoteEvent,
   PatternSection,
   Measure,
 } from "../types/app";
@@ -32,6 +31,7 @@ export interface AppContext {
     measureId: string;
     slotIndex: number;
   } | null;
+  clipboardChordId: string | null;
 }
 
 // 2. EVENTS
@@ -56,6 +56,8 @@ export type AppEvent =
   | { type: "CANCEL_NEW_PATTERN" }
   | { type: "UPDATE_NEW_PATTERN_NAME"; value: string }
   | { type: "CREATE_PATTERN"; name: string }
+  | { type: "COPY_SLOT" }
+  | { type: "PASTE_SLOT" }
   | {
     type: "UPDATE_SAVED_PATTERN";
     input: {
@@ -216,6 +218,7 @@ export const appMachine = setup({
     chordBankFilterTuning: null,
     chordPalette: [],
     activeSlot: null,
+    clipboardChordId: null,
   },
   states: {
     initializing: {
@@ -710,6 +713,53 @@ export const appMachine = setup({
           measureId: event.measureId,
           slotIndex: event.slotIndex,
         }),
+      }),
+    },
+    COPY_SLOT: {
+      actions: assign({
+        clipboardChordId: ({ context }) => {
+          const { activeSlot, currentPattern } = context;
+          if (!activeSlot) return context.clipboardChordId;
+
+          const section = currentPattern.find(
+            (s) => s.id === activeSlot.sectionId,
+          );
+          if (!section) return context.clipboardChordId;
+
+          const measure = section.measures.find(
+            (m) => m.id === activeSlot.measureId,
+          );
+          if (!measure) return context.clipboardChordId;
+
+          return measure.slots[activeSlot.slotIndex] ?? null;
+        },
+      }),
+    },
+    PASTE_SLOT: {
+      actions: assign({
+        currentPattern: ({ context }) => {
+          const { activeSlot, currentPattern, clipboardChordId } = context;
+          if (!activeSlot || clipboardChordId === null) {
+            return currentPattern;
+          }
+
+          return currentPattern.map((section) => {
+            if (section.id === activeSlot.sectionId) {
+              return {
+                ...section,
+                measures: section.measures.map((measure) => {
+                  if (measure.id === activeSlot.measureId) {
+                    const newSlots = [...measure.slots];
+                    newSlots[activeSlot.slotIndex] = clipboardChordId;
+                    return { ...measure, slots: newSlots };
+                  }
+                  return measure;
+                }),
+              };
+            }
+            return section;
+          });
+        },
       }),
     },
     CLEAR_SLOT: {

@@ -186,9 +186,31 @@ export const VisualEditor = (
   const chordsMap = new Map(
     savedChords.filter((c) => c.id).map((c) => [c.id as string, c]),
   );
+
+  const _handleKeyDown = (e: KeyboardEvent) => {
+    const snapshot = appActor.getSnapshot();
+    if (snapshot.context.activeSlot) {
+      if (e.ctrlKey && e.key === "c") {
+        e.preventDefault();
+        console.log("ctrl-c")
+        appActor.send({ type: "COPY_SLOT" });
+      }
+      if (e.ctrlKey && e.key === "v") {
+        e.preventDefault();
+
+        console.log("ctrl-v")
+        if (snapshot.context.clipboardChordId) {
+          appActor.send({ type: "PASTE_SLOT" });
+        }
+      }
+    }
+  };
+
   return html`
     <div
       class="w-full"
+      tabindex="0"
+      @keydown=${_handleKeyDown}
       @click=${(e: Event) => {
       const target = e.target as HTMLElement;
       if (!target.closest('[class*="cursor-pointer"], button, select')) {
