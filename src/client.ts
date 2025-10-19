@@ -18,6 +18,7 @@ import { ChordBank } from "./components/ChordBank";
 import { TuningManager } from "./components/TuningManager";
 import { ErrorMessage } from "./components/ErrorMessage";
 import { NewPatternDialog } from "./components/NewPatternDialog";
+import { ChordSelectionDialog } from "./components/ChordSelectionDialog";
 
 // --- XSTATE & API IMPLEMENTATION ---
 const machineWithImplementations = appMachine.provide({
@@ -101,7 +102,8 @@ const runApplication = () => {
           ? PatternEditor(selectors.selectCurrentPatternAsJson(snapshot))
           : VisualEditor(
             selectors.selectCurrentPatternAsJson(snapshot),
-            selectors.selectNotesInCurrentKey(snapshot),
+            selectors.selectSavedChords(snapshot),
+            selectors.selectActiveSlot(snapshot),
           ),
         editorContainer,
       );
@@ -148,6 +150,7 @@ const runApplication = () => {
         selectors.selectKeyType(snapshot),
         selectors.selectChordBankFilterKey(snapshot),
         selectors.selectChordBankFilterTuning(snapshot),
+        selectors.selectChordPalette(snapshot),
       ),
       chordBankContainer,
     );
@@ -160,12 +163,17 @@ const runApplication = () => {
     );
     render(ErrorMessage(selectors.selectErrorMessage(snapshot)), errorContainer);
 
-    render(
-      selectors.selectIsShowDialog(snapshot)
-        ? NewPatternDialog(selectors.selectNewPatternName(snapshot))
-        : html``,
-      modalContainer,
-    );
+    // --- Render Modals ---
+    let modalContent = html``;
+    if (selectors.selectIsShowDialog(snapshot)) {
+      modalContent = NewPatternDialog(selectors.selectNewPatternName(snapshot));
+    } else if (selectors.selectIsSelectingChord(snapshot)) {
+      modalContent = ChordSelectionDialog(
+        selectors.selectChordPalette(snapshot),
+        selectors.selectSavedChords(snapshot),
+      );
+    }
+    render(modalContent, modalContainer);
 
     // --- Audio Side-Effects ---
     player.toggleAudio(selectors.selectIsAudioOn(snapshot));
@@ -176,6 +184,8 @@ const runApplication = () => {
     if (currentPatternString !== lastScheduledPattern) {
       player.updateTransportSchedule(
         selectors.selectCurrentPatternAsJson(snapshot),
+        selectors.selectSavedChords(snapshot),
+        selectors.selectSavedTunings(snapshot),
       );
       lastScheduledPattern = currentPatternString;
     }

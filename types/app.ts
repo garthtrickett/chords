@@ -14,7 +14,7 @@ export interface NoteEvent {
 
 export interface Measure {
   id: string;
-  notes: NoteEvent[];
+  slots: (string | null)[]; // Array of chord IDs or null for empty slots
 }
 
 export interface PatternSection {

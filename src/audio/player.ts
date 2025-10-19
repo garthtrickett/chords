@@ -1,11 +1,10 @@
 // src/audio/player.ts
-import {
-  getTransport,
-  start as startAudio,
-  Sampler,
-  Time,
-} from "tone";
-import type { NoteEvent, PatternSection } from "../../types/app";
+import { getTransport, start as startAudio, Sampler, Time } from "tone";
+import type {
+  PatternSection,
+  SerializableChord,
+  SerializableTuning,
+} from "../../types/app";
 
 // --- TONE.JS SETUP ---
 const pianoSampler = new Sampler({
@@ -25,28 +24,36 @@ const guitarSampler = new Sampler({
   baseUrl: "https://tonejs.github.io/audio/berklee/",
 }).toDestination();
 
-let activeSynth: Sampler = pianoSampler; // Default to piano
+let activeSynth: Sampler = pianoSampler;
 const transport = getTransport();
 let scheduledEventIds: number[] = [];
 
 // --- UTILITIES ---
-export function parseCode(code: string | PatternSection[]): PatternSection[] {
-  if (Array.isArray(code)) return code; // Already in the correct format
-  try {
-    const parsed = JSON.parse(code);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    return [];
+const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const NOTE_MAP: Record<string, number> = {
+  "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6,
+  "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
+};
+
+function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
+  const notes: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const fret = tab[i];
+    if (fret === "x" || fret === "X" || fret === undefined) continue;
+    const fretNum = parseInt(fret, 10);
+    if (isNaN(fretNum)) continue;
+    const openStringNote = tuningNotes[i]?.toUpperCase();
+    if (!openStringNote || NOTE_MAP[openStringNote] === undefined) continue;
+    const openNoteIndex = NOTE_MAP[openStringNote];
+    const finalNoteIndex = (openNoteIndex + fretNum) % 12;
+    notes.push(NOTES[finalNoteIndex]);
   }
+  return notes;
 }
 
 // --- PLAYER FUNCTIONS ---
 export function setInstrument(instrument: "piano" | "guitar") {
-  if (instrument === "piano") {
-    activeSynth = pianoSampler;
-  } else {
-    activeSynth = guitarSampler;
-  }
+  activeSynth = instrument === "piano" ? pianoSampler : guitarSampler;
 }
 
 export function initializePlayer() {
@@ -55,40 +62,65 @@ export function initializePlayer() {
   transport.loopEnd = "1m";
 }
 
-export function updateTransportSchedule(pattern: PatternSection[]) {
-  // Clear previous events
+export function updateTransportSchedule(
+  pattern: PatternSection[],
+  chords: SerializableChord[],
+  tunings: SerializableTuning[],
+) {
   scheduledEventIds.forEach((id) => transport.clear(id));
   scheduledEventIds = [];
 
-  let accumulatedTime = 0; // Use seconds for absolute timing
+  const chordsMap = new Map(chords.map((c) => [c.id, c]));
+  const tuningsMap = new Map(tunings.map((t) => [t.name, t.notes.split(" ")]));
+
+  let totalDuration = 0;
+  const flatEventList: { time: number; notes: string[] }[] = [];
 
   pattern.forEach((section) => {
-    // Temporarily set time signature to calculate measure duration accurately
     const [beats, beatType] = section.timeSignature.split("/").map(Number);
-    transport.timeSignature = [beats, beatType];
-    const measureDuration = Time("1m").toSeconds();
+    const sixteenthNoteDuration = Time("16n").toSeconds();
+    const measureDuration = beats * (beatType === 8 ? 2 : 4) * sixteenthNoteDuration;
 
     section.measures.forEach((measure) => {
-      measure.notes.forEach((note) => {
-        const eventId = transport.schedule((time) => {
-          if (activeSynth.loaded) {
-            activeSynth.triggerAttackRelease(note.note, note.duration, time);
-          }
-        }, accumulatedTime + Time(note.time).toSeconds());
-        scheduledEventIds.push(eventId);
+      measure.slots.forEach((chordId, slotIndex) => {
+        if (!chordId) return;
+
+        const chord = chordsMap.get(chordId);
+        if (!chord) return;
+
+        const tuningNotes = tuningsMap.get(chord.tuning);
+        if (!tuningNotes) return;
+
+        const notesToPlay = calculateChordNotes(chord.tab, tuningNotes);
+        const eventTime = totalDuration + slotIndex * sixteenthNoteDuration;
+
+        flatEventList.push({ time: eventTime, notes: notesToPlay });
       });
-      // Increment total time by the calculated duration of one measure
-      accumulatedTime += measureDuration;
+      totalDuration += measureDuration;
     });
   });
 
-  if (pattern.length > 0 && accumulatedTime > 0) {
-    transport.loopEnd = accumulatedTime;
-    // Reset time signature to the first section for consistent default timing
-    const [beats, beatType] = pattern[0].timeSignature.split("/").map(Number);
-    transport.timeSignature = [beats, beatType];
+  if (flatEventList.length > 0) {
+    flatEventList.forEach((event, index) => {
+      const isLastEvent = index === flatEventList.length - 1;
+      const duration = isLastEvent
+        ? totalDuration - event.time
+        : flatEventList[index + 1].time - event.time;
+
+      const eventId = transport.schedule((time) => {
+        if (activeSynth.loaded) {
+          activeSynth.triggerAttackRelease(
+            event.notes.map((n) => `${n}4`),
+            duration,
+            time,
+          );
+        }
+      }, event.time);
+      scheduledEventIds.push(eventId);
+    });
+    transport.loopEnd = totalDuration;
   } else {
-    transport.loopEnd = "1m"; // Default loop if empty
+    transport.loopEnd = "1m";
   }
 }
 

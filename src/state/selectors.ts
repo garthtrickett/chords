@@ -21,11 +21,16 @@ export const selectSelectedPatternId = (s: AppSnapshot) =>
   s.context.selectedPatternId;
 export const selectIsShowDialog = (s: AppSnapshot) =>
   s.matches({ running: "showingNewPatternDialog" });
+export const selectIsSelectingChord = (s: AppSnapshot) =>
+  s.matches({ running: "selectingChordForSlot" });
 export const selectNewPatternName = (s: AppSnapshot) => s.context.newPatternName;
 export const selectViewMode = (s: AppSnapshot) =>
   s.matches({ running: { editing: { viewMode: "visual" } } })
     ? "visual"
     : "json";
+
+export const selectActiveSlot = (s: AppSnapshot) => s.context.activeSlot;
+export const selectChordPalette = (s: AppSnapshot) => s.context.chordPalette;
 
 // Selector for the instrument
 export const selectInstrument = (s: AppSnapshot) => s.context.instrument;

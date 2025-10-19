@@ -1,0 +1,61 @@
+// src/components/ChordSelectionDialog.ts
+import { html, nothing } from "lit-html";
+import { appActor } from "../client";
+import type { SerializableChord } from "../../types/app";
+import {
+  cardClasses,
+  secondaryButtonClasses,
+} from "./styles";
+
+export const ChordSelectionDialog = (
+  paletteChordIds: string[],
+  savedChords: SerializableChord[],
+) => {
+  const chordsMap = new Map(savedChords.map((c) => [c.id, c]));
+  const chordsInPalette = paletteChordIds
+    .map((id) => chordsMap.get(id))
+    .filter(Boolean) as SerializableChord[];
+
+  return html`<div
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+    @click=${(e: Event) => {
+      if (e.currentTarget === e.target) {
+        appActor.send({ type: "CANCEL_CHORD_SELECTION" });
+      }
+    }}
+  >
+    <div class="${cardClasses} w-full max-w-md">
+      <h3 class="text-lg font-medium mb-4 text-zinc-50">Assign Chord to Slot</h3>
+      ${chordsInPalette.length > 0
+      ? html`<div class="grid grid-cols-3 gap-2">
+            ${chordsInPalette.map(
+        (chord) =>
+          html`<button
+                  class="p-4 text-base bg-zinc-800 hover:bg-zinc-700 rounded text-center"
+                  @click=${() => {
+              if (chord.id) {
+                appActor.send({
+                  type: "ASSIGN_CHORD_TO_SLOT",
+                  chordId: chord.id,
+                });
+              }
+            }}
+                >
+                  ${chord.name}
+                </button>`,
+      )}
+          </div>`
+      : html`<p class="text-zinc-400 text-center py-4">
+            No chords in your palette. Go to the Chord Bank to add some.
+          </p>`}
+      <div class="mt-6 flex justify-end">
+        <button
+          class=${secondaryButtonClasses}
+          @click=${() => appActor.send({ type: "CANCEL_CHORD_SELECTION" })}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>`;
+};

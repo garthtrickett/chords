@@ -25,14 +25,6 @@ const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // W, H, W, W, H, W, W
 const ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII"];
 const ALL_KEYS = NOTES.flatMap((note) => [`${note} Major`, `${note} Minor`]);
 
-/**
- * Generates a detailed Roman numeral by analyzing a chord within a key,
- * including diatonic, borrowed, secondary dominant, and other altered chords.
- * @param chordSymbol The symbol of the chord to analyze (e.g., "G", "Am", "D7").
- * @param keyRoot The root of the key (e.g., "C").
- * @param keyType The type of the key (e.g., "major").
- * @returns The detailed Roman numeral string (e.g., "V", "vi", "V⁷/V") or an empty string.
- */
 function getAdvancedRomanNumeral(
   chordSymbol: string,
   keyRoot: string,
@@ -45,44 +37,28 @@ function getAdvancedRomanNumeral(
   if (chord.empty || !chord.tonic) return "";
   const degree = scale.notes.indexOf(chord.tonic) + 1;
 
-  // Append extensions and alterations to a base numeral
   const appendSuffix = (baseNumeral: string) => {
     switch (chord.type) {
-      case "major":
-        return baseNumeral;
-      case "minor":
-        return baseNumeral;
-      case "dominant 7th":
-        return baseNumeral + "⁷";
-      case "major 7th":
-        return baseNumeral + "M⁷";
-      case "minor 7th":
-        return baseNumeral + "m⁷";
-      case "diminished":
-        return baseNumeral + "°";
-      case "diminished 7th":
-        return baseNumeral + "°⁷";
-      case "half-diminished 7th":
-        return baseNumeral + "ø⁷";
-      case "augmented":
-        return baseNumeral + "+";
-      case "major 9th":
-        return baseNumeral + "M⁹";
-      case "minor 9th":
-        return baseNumeral + "m⁹";
-      case "dominant 9th":
-        return baseNumeral + "⁹";
-      case "suspended 4th":
-        return baseNumeral + "sus4";
-      case "suspended 2nd":
-        return baseNumeral + "sus2";
+      case "major": return baseNumeral;
+      case "minor": return baseNumeral;
+      case "dominant 7th": return baseNumeral + "⁷";
+      case "major 7th": return baseNumeral + "M⁷";
+      case "minor 7th": return baseNumeral + "m⁷";
+      case "diminished": return baseNumeral + "°";
+      case "diminished 7th": return baseNumeral + "°⁷";
+      case "half-diminished 7th": return baseNumeral + "ø⁷";
+      case "augmented": return baseNumeral + "+";
+      case "major 9th": return baseNumeral + "M⁹";
+      case "minor 9th": return baseNumeral + "m⁹";
+      case "dominant 9th": return baseNumeral + "⁹";
+      case "suspended 4th": return baseNumeral + "sus4";
+      case "suspended 2nd": return baseNumeral + "sus2";
       default:
         if (chord.aliases[0]) return baseNumeral + chord.aliases[0];
         return baseNumeral;
     }
   };
 
-  // 1. Handle Diatonic Chords
   if (degree > 0 && degree <= 7) {
     let finalRoman = ROMAN_NUMERALS[degree - 1];
     const diatonicTriads =
@@ -99,10 +75,7 @@ function getAdvancedRomanNumeral(
     return appendSuffix(finalRoman);
   }
 
-  // 2. Handle Chromatic / Altered Chords
-  // 2a. Secondary Dominants (e.g., V/V)
   if (chord.type === "dominant 7th" || chord.type === "major") {
-    // A secondary dominant resolves down a perfect 5th to a diatonic chord.
     const resolvedTonic = Note.transpose(chord.tonic, "-P5");
     const targetDegree = scale.notes.indexOf(resolvedTonic) + 1;
     if (targetDegree > 0 && targetDegree <= 7) {
@@ -112,70 +85,46 @@ function getAdvancedRomanNumeral(
     }
   }
 
-  // 2b. Borrowed Chords & Neapolitan using interval analysis
   const interval = Interval.distance(keyRoot, chord.tonic);
   const intervalToRomanMap: Record<string, string> = {
-    "2m": "♭II",
-    "3m": "♭III",
-    "5d": "♭V",
-    "6m": "♭VI",
-    "7m": "♭VII",
+    "2m": "♭II", "3m": "♭III", "5d": "♭V", "6m": "♭VI", "7m": "♭VII",
   };
   let baseRoman = intervalToRomanMap[interval];
 
   if (baseRoman) {
-    // Neapolitan chord is always major
     if (baseRoman === "♭II" && chord.quality !== "Major") return "";
-    // Most other borrowed chords are minor or diminished
     if (chord.quality === "Minor" || chord.quality === "Diminished") {
       baseRoman = baseRoman.toLowerCase();
     }
     return appendSuffix(baseRoman);
   }
 
-  return ""; // Fallback for unanalyzable chords
+  return "";
 }
 
-/**
- * Detects the most likely chord name from a set of notes and returns a standardized symbol.
- * This ensures the symbol (e.g., "G", "Am") matches the format used by Tonal's Key.triads.
- * @param notes - An array of note names (e.g., ['G', 'B', 'D']).
- * @returns The standardized chord symbol or an empty string if not found.
- */
 function getChordDisplayName(notes: string[]): string {
   const uniqueNotes = [...new Set(notes)].filter((n) => n !== "x" && n !== "?");
   if (uniqueNotes.length < 2) return "";
-
   const detected = Chord.detect(uniqueNotes);
   if (detected.length === 0) return "";
-
   const chord = Chord.get(detected[0]);
   return chord.empty ? "" : chord.symbol;
 }
 
-/**
- * Finds all major and minor keys that contain a given set of chord notes.
- * @param chordNotes - An array of note names (e.g., ['G', 'B', 'D']).
- * @returns An array of strings representing the matching keys (e.g., ['G Major', 'E Minor']).
- */
 function findMatchingKeys(chordNotes: string[]): string[] {
   const uniqueChordNotes = [...new Set(chordNotes)].filter(
     (n) => n !== "x" && n !== "?",
   );
   if (uniqueChordNotes.length === 0) return [];
-
   const matchingKeys: string[] = [];
   for (let i = 0; i < NOTES.length; i++) {
     const rootNote = NOTES[i];
-    // Check Major keys
     const majorScale = new Set(
       MAJOR_INTERVALS.map((interval) => NOTES[(i + interval) % 12]),
     );
     if (uniqueChordNotes.every((note) => majorScale.has(note))) {
       matchingKeys.push(`${rootNote} Major`);
     }
-
-    // Check Minor keys
     const minorScale = new Set(
       MINOR_INTERVALS.map((interval) => NOTES[(i + interval) % 12]),
     );
@@ -183,16 +132,13 @@ function findMatchingKeys(chordNotes: string[]): string[] {
       matchingKeys.push(`${rootNote} Minor`);
     }
   }
-
   return matchingKeys;
 }
 
 function calculateNotesFromTab(tab: string, tuningNotes: string[]): string[] {
   const notes: string[] = [];
-  // Assumes tab string is low E to high e (6th string to 1st string)
   for (let i = 0; i < 6; i++) {
     const fret = tab[i];
-    // tuningNotes is also low E to high e, so we can use a direct index.
     const openStringNote = tuningNotes[i]?.toUpperCase();
     if (fret === "x" || fret === "X" || fret === undefined) {
       notes.push("x");
@@ -203,7 +149,6 @@ function calculateNotesFromTab(tab: string, tuningNotes: string[]): string[] {
       notes.push("?");
       continue;
     }
-
     if (!openStringNote || NOTE_MAP[openStringNote] === undefined) {
       notes.push("?");
       continue;
@@ -223,19 +168,15 @@ export const ChordBank = (
   keyType: "major" | "minor",
   chordBankFilterKey: string | null,
   chordBankFilterTuning: string | null,
+  chordPalette: string[],
 ) => {
   const tuningsMap = new Map(
     savedTunings.map((t) => [t.name, t.notes.split(" ")]),
   );
-
-  // --- FILTERING LOGIC ---
   const filteredChords = savedChords.filter((chord) => {
-    // Check tuning filter
     const tuningMatch =
       !chordBankFilterTuning || chord.tuning === chordBankFilterTuning;
     if (!tuningMatch) return false;
-
-    // Check key filter
     if (chordBankFilterKey) {
       const tuningNotes = tuningsMap.get(chord.tuning);
       if (!tuningNotes) return false;
@@ -243,7 +184,6 @@ export const ChordBank = (
       const matchingKeys = findMatchingKeys(notes);
       return matchingKeys.includes(chordBankFilterKey);
     }
-
     return true;
   });
 
@@ -262,13 +202,11 @@ export const ChordBank = (
       const tabInputs = Array.from(
         form.querySelectorAll<HTMLInputElement>('input[name^="fret-"]'),
       );
-      // Construct tab from low E to high e directly
       const tab = tabInputs
         .map((input) =>
           input.value.trim() === "" ? "x" : input.value.trim(),
         )
         .join("");
-
       if (name.trim() && tab.length === 6) {
         appActor.send({
           type: "CREATE_CHORD",
@@ -393,27 +331,42 @@ export const ChordBank = (
       if (editingChordId === chord.id) {
         return ChordEditorForm(chord, savedTunings);
       }
+      if (!chord.id) return nothing;
       const tuningNotes = tuningsMap.get(chord.tuning);
       const notes = tuningNotes
         ? calculateNotesFromTab(chord.tab, tuningNotes)
         : Array(6).fill("?");
-
       const matchingKeys = findMatchingKeys(notes);
       const detectedChordName = getChordDisplayName(notes);
+      const isSelected = chordPalette.includes(chord.id);
+
       return html`
           <div class="p-3 bg-zinc-800 rounded">
             <div class="flex items-center justify-between">
-              <div class="flex items-baseline gap-2">
-                <span class="font-semibold text-zinc-300">${chord.name}</span>
-                ${detectedChordName
+              <div class="flex items-center gap-4">
+                <input
+                  type="checkbox"
+                  id="palette-toggle-${chord.id}"
+                  class="h-4 w-4 rounded border-zinc-600 bg-zinc-700 text-teal-500 focus:ring-teal-600"
+                  .checked=${isSelected}
+                  @change=${() =>
+          appActor.send({
+            type: "TOGGLE_CHORD_IN_PALETTE",
+            chordId: chord.id as string,
+          })}
+                />
+                <label for="palette-toggle-${chord.id}" class="flex items-baseline gap-2 cursor-pointer">
+                  <span class="font-semibold text-zinc-300">${chord.name}</span>
+                  ${detectedChordName
           ? html`<span
-                      class="text-sm text-lime-400 font-mono"
-                      >${detectedChordName}</span
-                    >`
+                        class="text-sm text-lime-400 font-mono"
+                        >${detectedChordName}</span
+                      >`
           : nothing}
-                <span class="text-sm text-zinc-500"
-                  >(${chord.tuning})</span
-                >
+                  <span class="text-sm text-zinc-500"
+                    >(${chord.tuning})</span
+                  >
+                </label>
               </div>
               <div class="flex items-center gap-4">
                 <div class="font-mono text-cyan-400 flex gap-x-2 text-lg">
@@ -422,18 +375,6 @@ export const ChordBank = (
           .map((fret) => html`<span>${fret}</span>`)}
                 </div>
                 <div class="flex gap-2">
-                  <button
-                    @click=${() => {
-          if (chord.id)
-            appActor.send({
-              type: "LOAD_CHORD_INTO_PATTERN",
-              chordId: chord.id,
-            });
-        }}
-                    class="${secondaryButtonClasses} h-8 px-3 text-xs"
-                  >
-                    Load
-                  </button>
                   <button
                     @click=${() => {
           if (chord.id)

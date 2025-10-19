@@ -4,7 +4,7 @@ import { cardClasses } from "./styles";
 
 export const AppShell = () => html`
   <div class="bg-zinc-950 text-zinc-50 min-h-screen font-sans">
-    <div class="container mx-auto p-4 md:p-8 max-w-3xl">
+    <div class="container mx-auto p-4 md:p-8">
       <header class="text-center mb-8">
         <h1 class="text-4xl font-bold tracking-tight text-zinc-50">
           Polyphonic Live Coder
@@ -17,13 +17,13 @@ export const AppShell = () => html`
         <div id="editor-container"></div>
         <div id="controls-container"></div>
       </div>
-      <div class="mt-8 ${cardClasses}">
+      <div class="mt-8 ${cardClasses} max-w-3xl mx-auto">
         <div id="loader-container"></div>
       </div>
-      <div class="mt-8 ${cardClasses}">
+      <div class="mt-8 ${cardClasses} max-w-3xl mx-auto">
         <div id="chord-bank-container"></div>
       </div>
-      <div class="mt-8 ${cardClasses}">
+      <div class="mt-8 ${cardClasses} max-w-3xl mx-auto">
         <div id="tuning-manager-container"></div>
       </div>
     </div>

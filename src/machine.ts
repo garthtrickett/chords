@@ -27,6 +27,12 @@ export interface AppContext {
   instrument: "piano" | "guitar";
   chordBankFilterKey: string | null;
   chordBankFilterTuning: string | null;
+  chordPalette: string[];
+  activeSlot: {
+    sectionId: string;
+    measureId: string;
+    slotIndex: number;
+  } | null;
 }
 
 // 2. EVENTS
@@ -35,8 +41,14 @@ export type AppEvent =
   | { type: "STOP_AUDIO" }
   | { type: "UPDATE_PATTERN_STRUCTURE"; value: PatternSection[] }
   | { type: "ADD_SECTION" }
+  | { type: "ADD_MEASURE"; sectionId: string }
   | { type: "UPDATE_SECTION_TIME_SIGNATURE"; sectionId: string; timeSignature: string }
   | { type: "DELETE_SECTION"; sectionId: string }
+  | { type: "SELECT_SLOT"; sectionId: string; measureId: string; slotIndex: number }
+  | { type: "CLEAR_SLOT_SELECTION" }
+  | { type: "TOGGLE_CHORD_IN_PALETTE"; chordId: string }
+  | { type: "ASSIGN_CHORD_TO_SLOT"; chordId: string }
+  | { type: "CANCEL_CHORD_SELECTION" }
   | { type: "UPDATE_PATTERN_NAME"; value: string }
   | { type: "SELECT_PATTERN"; id: string }
   | { type: "NEW_PATTERN" }
@@ -71,7 +83,6 @@ export type AppEvent =
   | { type: "DELETE_TUNING"; id: string }
   | { type: "EDIT_TUNING"; id: string }
   | { type: "CANCEL_EDIT_TUNING" }
-  | { type: "LOAD_CHORD_INTO_PATTERN"; chordId: string }
   | { type: "SET_KEY_ROOT"; root: string }
   | { type: "SET_KEY_TYPE"; keyType: "major" | "minor" }
   | { type: "SET_INSTRUMENT"; instrument: "piano" | "guitar" }
@@ -118,48 +129,26 @@ const safeParsePattern = (notesJson: string): PatternSection[] => {
   try {
     const parsed = JSON.parse(notesJson);
     if (Array.isArray(parsed)) {
-      // Basic validation: check if it looks like our section structure
-      if (parsed.every((p) => p.id && p.timeSignature && p.measures)) {
+      if (
+        parsed.length === 0 ||
+        (parsed[0] && parsed[0].id && parsed[0].timeSignature && parsed[0].measures)
+      ) {
         return parsed;
       }
     }
-    return []; // Return empty if not valid structure
+    return [];
   } catch (e) {
-    return []; // Return empty for invalid JSON
+    return [];
   }
 };
 
-// --- HELPERS for chord logic ---
-const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const NOTE_MAP: Record<string, number> = {
-  "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6,
-  "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
-};
-
-function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
-  const notes: string[] = [];
-  for (let i = 0; i < 6; i++) {
-    const fret = tab[i];
-    if (fret === "x" || fret === "X" || fret === undefined) {
-      notes.push("x");
-      continue;
-    }
-    const fretNum = parseInt(fret, 10);
-    if (isNaN(fretNum)) {
-      notes.push("?");
-      continue;
-    }
-    const openStringNote = tuningNotes[i]?.toUpperCase();
-    if (!openStringNote || NOTE_MAP[openStringNote] === undefined) {
-      notes.push("?");
-      continue;
-    }
-    const openNoteIndex = NOTE_MAP[openStringNote];
-    const finalNoteIndex = (openNoteIndex + fretNum) % 12;
-    notes.push(NOTES[finalNoteIndex]);
+const getSlotsForTimeSignature = (timeSignature: string): number => {
+  const [beats, beatType] = timeSignature.split("/").map(Number);
+  if (beatType === 8) {
+    return beats * 2; // Each 8th note gets two 16th note slots
   }
-  return notes;
-}
+  return beats * 4; // Each 4th note gets four 16th note slots
+};
 
 // 4. MACHINE DEFINITION (with setup)
 export const appMachine = setup({
@@ -217,6 +206,8 @@ export const appMachine = setup({
     instrument: "piano",
     chordBankFilterKey: null,
     chordBankFilterTuning: null,
+    chordPalette: [],
+    activeSlot: null,
   },
   states: {
     initializing: {
@@ -513,6 +504,7 @@ export const appMachine = setup({
                         selectedPatternId: null,
                         keyRoot: "C",
                         keyType: "major",
+                        activeSlot: null,
                       }),
                     },
                     onError: {
@@ -527,23 +519,67 @@ export const appMachine = setup({
               },
             },
             viewMode: {
-              initial: "json",
+              initial: "visual",
               states: {
                 json: { on: { TOGGLE_VIEW: "visual" } },
                 visual: { on: { TOGGLE_VIEW: "json" } },
               },
             },
           },
-          on: { NEW_PATTERN: "showingNewPatternDialog" },
+          on: {
+            NEW_PATTERN: "showingNewPatternDialog",
+            SELECT_SLOT: {
+              target: "selectingChordForSlot",
+              actions: assign({
+                activeSlot: ({ event }) => ({
+                  sectionId: event.sectionId,
+                  measureId: event.measureId,
+                  slotIndex: event.slotIndex,
+                }),
+              }),
+            },
+          },
         },
         showingNewPatternDialog: {
           on: {
-            CANCEL_NEW_PATTERN: {
-              target: "editing.saveStatus.idle",
+            CANCEL_NEW_PATTERN: "editing",
+            CREATE_PATTERN: "editing.saveStatus.creating",
+          },
+        },
+        selectingChordForSlot: {
+          on: {
+            ASSIGN_CHORD_TO_SLOT: {
+              target: "editing",
+              actions: [
+                assign({
+                  currentPattern: ({ context, event }) => {
+                    const { activeSlot } = context;
+                    if (!activeSlot) return context.currentPattern;
+
+                    return context.currentPattern.map((section) => {
+                      if (section.id === activeSlot.sectionId) {
+                        return {
+                          ...section,
+                          measures: section.measures.map((measure) => {
+                            if (measure.id === activeSlot.measureId) {
+                              const newSlots = [...measure.slots];
+                              newSlots[activeSlot.slotIndex] = event.chordId;
+                              return { ...measure, slots: newSlots };
+                            }
+                            return measure;
+                          }),
+                        };
+                      }
+                      return section;
+                    });
+                  },
+                }),
+                assign({ activeSlot: null }),
+              ],
             },
-            CREATE_PATTERN: {
-              target: "editing.saveStatus.creating",
-              actions: assign({ newPatternName: "" }),
+            CANCEL_CHORD_SELECTION: {
+              target: "editing",
+              actions: assign({ activeSlot: null }),
             },
           },
         },
@@ -556,14 +592,37 @@ export const appMachine = setup({
     },
     ADD_SECTION: {
       actions: assign({
-        currentPattern: ({ context }) => [
-          ...context.currentPattern,
-          {
-            id: nanoid(),
-            timeSignature: "4/4",
-            measures: [{ id: nanoid(), notes: [] }],
-          },
-        ],
+        currentPattern: ({ context }) => {
+          const slots = getSlotsForTimeSignature("4/4");
+          return [
+            ...context.currentPattern,
+            {
+              id: nanoid(),
+              timeSignature: "4/4",
+              measures: [{ id: nanoid(), slots: Array(slots).fill(null) }],
+            },
+          ];
+        },
+      }),
+    },
+    ADD_MEASURE: {
+      actions: assign({
+        currentPattern: ({ context, event }) => {
+          return context.currentPattern.map((section) => {
+            if (section.id === event.sectionId) {
+              const slots = getSlotsForTimeSignature(section.timeSignature);
+              const newMeasure: Measure = {
+                id: nanoid(),
+                slots: Array(slots).fill(null),
+              };
+              return {
+                ...section,
+                measures: [...section.measures, newMeasure],
+              };
+            }
+            return section;
+          });
+        },
       }),
     },
     DELETE_SECTION: {
@@ -572,16 +631,43 @@ export const appMachine = setup({
           context.currentPattern.filter(
             (section) => section.id !== event.sectionId,
           ),
+        activeSlot: null,
       }),
     },
     UPDATE_SECTION_TIME_SIGNATURE: {
       actions: assign({
         currentPattern: ({ context, event }) =>
-          context.currentPattern.map((section) =>
-            section.id === event.sectionId
-              ? { ...section, timeSignature: event.timeSignature }
-              : section,
-          ),
+          context.currentPattern.map((section) => {
+            if (section.id === event.sectionId) {
+              const slots = getSlotsForTimeSignature(event.timeSignature);
+              const newMeasures = section.measures.map((measure) => ({
+                ...measure,
+                slots: Array(slots).fill(null), // Reset slots
+              }));
+              return {
+                ...section,
+                timeSignature: event.timeSignature,
+                measures: newMeasures,
+              };
+            }
+            return section;
+          }),
+        activeSlot: null,
+      }),
+    },
+    CLEAR_SLOT_SELECTION: {
+      actions: assign({ activeSlot: null }),
+    },
+    TOGGLE_CHORD_IN_PALETTE: {
+      actions: assign({
+        chordPalette: ({ context, event }) => {
+          const { chordPalette } = context;
+          const { chordId } = event;
+          if (chordPalette.includes(chordId)) {
+            return chordPalette.filter((id) => id !== chordId);
+          }
+          return [...chordPalette, chordId];
+        },
       }),
     },
     UPDATE_PATTERN_NAME: {
@@ -613,6 +699,7 @@ export const appMachine = setup({
             ? (selected.key_type as "major" | "minor")
             : context.keyType;
         },
+        activeSlot: null,
       }),
     },
     EDIT_CHORD: {
@@ -626,55 +713,6 @@ export const appMachine = setup({
     },
     CANCEL_EDIT_TUNING: {
       actions: assign({ editingTuningId: null }),
-    },
-    LOAD_CHORD_INTO_PATTERN: {
-      actions: assign({
-        currentPattern: ({ context, event }) => {
-          const chord = context.savedChords.find((c) => c.id === event.chordId);
-          if (!chord || context.currentPattern.length === 0) {
-            return context.currentPattern;
-          }
-
-          const tuning = context.savedTunings.find(
-            (t) => t.name === chord.tuning,
-          );
-          if (!tuning) return context.currentPattern;
-
-          const tuningNotes = tuning.notes.split(" ");
-          const chordNotes = calculateChordNotes(chord.tab, tuningNotes).filter(
-            (n) => n !== "x" && n !== "?",
-          );
-
-          const newNoteEvents: NoteEvent[] = chordNotes.map((noteName) => ({
-            time: "0:0", // Default to the start of the measure
-            note: `${noteName}4`,
-            duration: "4n",
-          }));
-
-          const lastSection =
-            context.currentPattern[context.currentPattern.length - 1];
-          const lastMeasure = lastSection.measures[lastSection.measures.length - 1];
-
-          let updatedLastSection;
-          // If the last measure is empty, replace its notes. Otherwise, add a new measure.
-          if (lastMeasure && lastMeasure.notes.length === 0) {
-            const updatedMeasures = lastSection.measures.map((m: Measure) =>
-              m.id === lastMeasure.id ? { ...m, notes: newNoteEvents } : m,
-            );
-            updatedLastSection = { ...lastSection, measures: updatedMeasures };
-          } else {
-            const newMeasure = { id: nanoid(), notes: newNoteEvents };
-            updatedLastSection = {
-              ...lastSection,
-              measures: [...lastSection.measures, newMeasure],
-            };
-          }
-
-          return context.currentPattern.map((s) =>
-            s.id === lastSection.id ? updatedLastSection : s,
-          );
-        },
-      }),
     },
     SET_KEY_ROOT: {
       actions: assign({ keyRoot: ({ event }) => event.root }),

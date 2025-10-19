@@ -1,46 +1,109 @@
 // src/components/VisualEditor.ts
 import { html } from "lit-html";
 import { appActor } from "../client";
-import type { NoteEvent, PatternSection, Measure } from "../../types/app";
+import type {
+  PatternSection,
+  Measure,
+  SerializableChord,
+} from "../../types/app";
 import {
   baseInputClasses,
   destructiveButtonClasses,
   secondaryButtonClasses,
 } from "./styles";
 
-const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/8", "7/8"];
+const TIME_SIGNATURES = [
+  "2/4", "3/4", "4/4", "5/4", "6/8", "7/8", "9/8", "11/8", "12/8", "13/8", "15/8",
+];
 
-const renderNote = (note: NoteEvent) => html`
-  <div
-    class="bg-cyan-800/50 p-1 rounded text-xs text-center border border-cyan-700"
-  >
-    <div class="font-bold">${note.note}</div>
-    <div class="text-cyan-300">${note.duration}</div>
-  </div>
-`;
-
-const renderMeasure = (
+const renderSlot = (
   sectionId: string,
   measure: Measure,
-  timeSignature: string,
+  slotIndex: number,
+  chordsMap: Map<string, SerializableChord>,
+  activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
 ) => {
-  const [beats] = timeSignature.split("/").map(Number);
+  const chordId = measure.slots[slotIndex];
+  const chord = chordId ? chordsMap.get(chordId) : null;
+  const isActive =
+    activeSlot?.sectionId === sectionId &&
+    activeSlot?.measureId === measure.id &&
+    activeSlot?.slotIndex === slotIndex;
+
+  const slotClasses = `
+    relative flex items-center justify-center rounded text-center border h-12 text-xs
+    ${isActive
+      ? "bg-teal-400/20 border-teal-400"
+      : "bg-zinc-700/50 border-zinc-600 hover:border-zinc-400"
+    }
+    cursor-pointer transition-colors
+  `;
+
   return html`
-    <div class="bg-zinc-800 p-2 rounded-md flex-shrink-0 w-48">
-      <div class="grid grid-cols-${beats} gap-1 h-full">
-        ${measure.notes.length > 0
-      ? measure.notes.map(renderNote)
-      : html`<div
-              class="col-span-${beats} text-center text-zinc-600 text-sm flex items-center justify-center"
+    <div
+      class=${slotClasses}
+      @click=${() =>
+      appActor.send({
+        type: "SELECT_SLOT",
+        sectionId,
+        measureId: measure.id,
+        slotIndex,
+      })}
+    >
+      ${chord
+      ? html`<span class="font-medium text-zinc-200">${chord.name}</span>`
+      : html`<span class="text-zinc-600">+</span>`}
+    </div>
+  `;
+};
+
+const renderMeasure = (
+  section: PatternSection,
+  measure: Measure,
+  chordsMap: Map<string, SerializableChord>,
+  activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
+) => {
+  const [beats, beatType] = section.timeSignature.split("/").map(Number);
+  const subdivisions = beatType === 8 ? 2 : 4;
+  const beatSlots = Array.from({ length: beats }, (_, i) =>
+    measure.slots.slice(i * subdivisions, (i + 1) * subdivisions),
+  );
+
+  return html`
+    <div class="bg-zinc-800 p-2 rounded-md flex-shrink-0">
+      <div
+        class="grid gap-2 h-full"
+        style="grid-template-columns: repeat(${beats}, minmax(0, 1fr));"
+      >
+        ${beatSlots.map(
+    (slots, beatIndex) => html`
+            <div
+              class="grid gap-1"
+              style="grid-template-columns: repeat(${subdivisions}, minmax(0, 1fr));"
             >
-              Empty
-            </div>`}
+              ${slots.map((_, subdivisionIndex) => {
+      const slotIndex = beatIndex * subdivisions + subdivisionIndex;
+      return renderSlot(
+        section.id,
+        measure,
+        slotIndex,
+        chordsMap,
+        activeSlot,
+      );
+    })}
+            </div>
+          `,
+  )}
       </div>
     </div>
   `;
 };
 
-const renderSection = (section: PatternSection) => html`
+const renderSection = (
+  section: PatternSection,
+  chordsMap: Map<string, SerializableChord>,
+  activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
+) => html`
   <div
     class="flex flex-col gap-2 p-3 bg-zinc-900 border border-zinc-700 rounded-lg"
   >
@@ -72,27 +135,52 @@ const renderSection = (section: PatternSection) => html`
         Delete Section
       </button>
     </div>
-    <div class="flex gap-2 overflow-x-auto pb-2">
+    <div class="flex gap-2 overflow-x-auto pb-2 items-center">
       ${section.measures.map((measure) =>
-      renderMeasure(section.id, measure, section.timeSignature),
+      renderMeasure(section, measure, chordsMap, activeSlot),
     )}
+      <button
+        class="${secondaryButtonClasses} !h-12 !w-12 flex-shrink-0 flex items-center justify-center text-2xl"
+        @click=${() =>
+    appActor.send({ type: "ADD_MEASURE", sectionId: section.id })}
+      >
+        +
+      </button>
     </div>
   </div>
 `;
 
 export const VisualEditor = (
   currentPattern: PatternSection[],
-  notesInKey: string[],
+  savedChords: SerializableChord[],
+  activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
 ) => {
-  return html`<div
-    class="space-x-4 flex items-start p-4 border border-zinc-700 rounded-lg bg-zinc-950/50 min-h-[240px] overflow-x-auto"
-  >
-    ${currentPattern.map(renderSection)}
-    <button
-      class="${secondaryButtonClasses} h-full flex-shrink-0"
-      @click=${() => appActor.send({ type: "ADD_SECTION" })}
+  const chordsMap = new Map(
+    savedChords.filter((c) => c.id).map((c) => [c.id as string, c]),
+  );
+  return html`
+    <div
+      class="w-full"
+      @click=${(e: Event) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[class*="cursor-pointer"], button, select')) {
+        appActor.send({ type: "CLEAR_SLOT_SELECTION" });
+      }
+    }}
     >
-      + Add Section
-    </button>
-  </div>`;
+      <div
+        class="gap-4 flex flex-wrap items-start p-4 border border-zinc-700 rounded-lg bg-zinc-950/50 min-h-[320px]"
+      >
+        ${currentPattern.map((section) =>
+      renderSection(section, chordsMap, activeSlot),
+    )}
+        <button
+          class="${secondaryButtonClasses} h-full flex-shrink-0 self-stretch"
+          @click=${() => appActor.send({ type: "ADD_SECTION" })}
+        >
+          + Add Section
+        </button>
+      </div>
+    </div>
+  `;
 };
