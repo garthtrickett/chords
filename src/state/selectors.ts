@@ -26,7 +26,8 @@ export const selectIsSelectingChord = (s: AppSnapshot) =>
 export const selectNewPatternName = (s: AppSnapshot) => s.context.newPatternName;
 export const selectViewMode = (s: AppSnapshot) =>
   s.matches({ running: { editing: { viewMode: "visual" } } })
-    ? "visual"
+    ?
+    "visual"
     : "json";
 
 export const selectActiveSlot = (s: AppSnapshot) => s.context.activeSlot;
@@ -63,6 +64,9 @@ export const selectChordBankFilterKey = (s: AppSnapshot) =>
   s.context.chordBankFilterKey;
 export const selectChordBankFilterTuning = (s: AppSnapshot) =>
   s.context.chordBankFilterTuning;
+
+// NEW: Selector for the currently playing beat index
+export const selectActiveBeat = (s: AppSnapshot) => s.context.activeBeat;
 
 // --- Music Theory Logic ---
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];

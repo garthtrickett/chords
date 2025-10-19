@@ -5,6 +5,7 @@ import type {
   SerializablePattern,
   SerializableChord,
   SerializableTuning,
+  NoteEvent,
   PatternSection,
   Measure,
 } from "../types/app";
@@ -32,6 +33,8 @@ export interface AppContext {
     slotIndex: number;
   } | null;
   clipboardChordId: string | null;
+  // NEW: Track the currently playing 16th note slot index
+  activeBeat: number;
 }
 
 // 2. EVENTS
@@ -146,6 +149,10 @@ export type AppEvent =
   | { type: "SET_CHORD_BANK_FILTER_TUNING"; tuning: string }
   |
   { type: "CLEAR_CHORD_BANK_FILTERS" }
+  | {
+    type: "UPDATE_ACTIVE_BEAT"; // <-- NEW EVENT
+    beat: number;
+  }
   | {
     type: "done.invoke.fetchInitialData";
     output: {
@@ -302,6 +309,7 @@ export const appMachine = setup({
     chordPalette: [],
     activeSlot: null,
     clipboardChordId: null,
+    activeBeat: -1, // NEW: Default to -1 (not playing)
   },
   states: {
     initializing: {
@@ -375,7 +383,7 @@ export const appMachine = setup({
               initial: "off",
               states: {
 
-                off: { on: { START_AUDIO: "on" } },
+                off: { on: { START_AUDIO: "on" }, entry: assign({ activeBeat: -1 }) }, // Reset beat on stop
                 on: { on: { STOP_AUDIO: "off" } },
               },
             },
@@ -794,6 +802,10 @@ export const appMachine = setup({
     },
   },
   on: {
+    // NEW: Update active beat from the audio player
+    UPDATE_ACTIVE_BEAT: {
+      actions: assign({ activeBeat: ({ event }) => event.beat }),
+    },
     UPDATE_PATTERN_STRUCTURE: {
       actions: assign({ currentPattern: ({ event }) => event.value }),
     },
@@ -1149,5 +1161,7 @@ export const appMachine = setup({
     },
   },
 });
+
+
 
 

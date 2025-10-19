@@ -19,7 +19,6 @@ import { TuningManager } from "./components/TuningManager";
 import { ErrorMessage } from "./components/ErrorMessage";
 import { NewPatternDialog } from "./components/NewPatternDialog";
 import { ChordSelectionDialog } from "./components/ChordSelectionDialog";
-
 // --- XSTATE & API IMPLEMENTATION ---
 const machineWithImplementations = appMachine.provide({
   actors: {
@@ -37,6 +36,7 @@ const machineWithImplementations = appMachine.provide({
     ),
     createChord: fromPromise(({ input }) =>
       api.createChordEffect(input).pipe(Effect.runPromise),
+
     ),
     updateChord: fromPromise(({ input }) =>
       api.updateChordEffect(input).pipe(Effect.runPromise),
@@ -55,18 +55,15 @@ const machineWithImplementations = appMachine.provide({
     ),
   },
 });
-
 // --- RENDER & HMR LOGIC ---
 let appActor: Actor<typeof machineWithImplementations>;
 let lastScheduledPattern = "";
 let lastInstrument = "";
-
 const getContainer = (id: string) => {
   const el = document.querySelector<HTMLElement>(id);
   if (!el) throw new Error(`Could not find container with id: ${id}`);
   return el;
 };
-
 // Encapsulate the rendering logic into a function
 const runApplication = () => {
   // Get all containers for dynamic content
@@ -80,8 +77,8 @@ const runApplication = () => {
 
   // Create and start the actor
   appActor = createActor(machineWithImplementations).start();
-  // Initialize the audio player
-  player.initializePlayer();
+  // Initialize the audio player, passing the actor's send function
+  player.initializePlayer(appActor.send);
 
   // --- MAIN SUBSCRIPTION LOOP ---
   appActor.subscribe((snapshot) => {
@@ -98,16 +95,19 @@ const runApplication = () => {
     if (selectedPatternId) {
       const viewMode = selectors.selectViewMode(snapshot);
       render(
+
         viewMode === "json"
           ? PatternEditor(selectors.selectCurrentPatternAsJson(snapshot))
           : VisualEditor(
             selectors.selectCurrentPatternAsJson(snapshot),
             selectors.selectSavedChords(snapshot),
             selectors.selectActiveSlot(snapshot),
+            selectors.selectActiveBeat(snapshot), // Pass active beat
           ),
         editorContainer,
       );
     } else {
+
       render(
         html`<div
           class="min-h-[240px] flex items-center justify-center text-center text-zinc-500"
@@ -117,6 +117,7 @@ const runApplication = () => {
             <p class="text-sm">Create a new pattern to get started.</p>
           </div>
         </div>`,
+
         editorContainer,
       );
     }
@@ -132,6 +133,7 @@ const runApplication = () => {
         keyType: selectors.selectKeyType(snapshot),
         instrument: instrument,
       }),
+
       controlsContainer,
     );
     render(
@@ -178,7 +180,6 @@ const runApplication = () => {
 
     // --- Audio Side-Effects ---
     player.toggleAudio(selectors.selectIsAudioOn(snapshot));
-
     const currentPatternString = JSON.stringify(
       selectors.selectCurrentPatternAsJson(snapshot),
     );
@@ -196,7 +197,6 @@ const runApplication = () => {
 // --- INITIAL BOOTSTRAP ---
 render(AppShell(), getContainer("#app-shell"));
 runApplication();
-
 // --- VITE HMR ---
 if (import.meta.hot) {
   import.meta.hot.accept(() => {

@@ -20,19 +20,27 @@ const renderSlot = (
   slotIndex: number,
   chordsMap: Map<string, SerializableChord>,
   activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
+  // NEW: Pass the total index of the slot and the active beat
+  currentTotalSlotIndex: number,
+  activeBeat: number,
 ) => {
   const chordId = measure.slots[slotIndex];
   const chord = chordId ? chordsMap.get(chordId) : null;
-  const isActive =
+  const isActiveSelection =
     activeSlot?.sectionId === sectionId &&
     activeSlot?.measureId === measure.id &&
     activeSlot?.slotIndex === slotIndex;
+
+  // NEW: Check if this slot is the currently playing beat
+  const isPlaying = activeBeat === currentTotalSlotIndex;
+
   const slotClasses = `
     relative group flex items-center justify-center rounded text-center border h-12 text-xs min-w-16
-    ${isActive
-      ?
-      "bg-teal-400/20 border-teal-400"
-      : "bg-zinc-700/50 border-zinc-600 hover:border-zinc-400"
+    ${isPlaying
+      ? "bg-teal-700/50 border-teal-400" // New highlight class for playing slot
+      : isActiveSelection
+        ? "bg-teal-400/20 border-teal-400"
+        : "bg-zinc-700/50 border-zinc-600 hover:border-zinc-400"
     }
     cursor-pointer transition-colors
   `;
@@ -81,7 +89,7 @@ const renderSlot = (
     // Remove the yellow highlight classes
     target.classList.remove("border-yellow-400", "bg-yellow-400/20");
     // Restore the original zinc classes
-    if (!isActive) {
+    if (!isActiveSelection) {
       target.classList.add("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
     }
   };
@@ -93,7 +101,7 @@ const renderSlot = (
     // Clean up the visual cue
     target.classList.remove("border-yellow-400", "bg-yellow-400/20");
     // Restore zinc classes on drop if not active
-    if (!isActive) {
+    if (!isActiveSelection) {
       target.classList.add("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
     }
 
@@ -194,11 +202,14 @@ const renderSlot = (
   `;
 };
 
+// MODIFIED: Accepts the running total of slots before this measure
 const renderMeasure = (
   section: PatternSection,
   measure: Measure,
   chordsMap: Map<string, SerializableChord>,
   activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
+  activeBeat: number,
+  totalSlotsBeforeMeasure: number, // NEW parameter
 ) => {
   const [beats, beatType] = section.timeSignature.split("/").map(Number);
   const subdivisions = beatType === 8 ? 2 : 4;
@@ -220,12 +231,16 @@ const renderMeasure = (
               ${slots.map((_, subdivisionIndex) => {
       const slotIndex = beatIndex * subdivisions
         + subdivisionIndex;
+      const currentTotalSlotIndex = totalSlotsBeforeMeasure + slotIndex; // Calculate total index
+
       return renderSlot(
         section.id,
         measure,
         slotIndex,
         chordsMap,
         activeSlot,
+        currentTotalSlotIndex, // Pass total index
+        activeBeat, // Pass active beat
       );
     })}
             </div>
@@ -240,6 +255,8 @@ const renderSection = (
   section: PatternSection,
   chordsMap: Map<string, SerializableChord>,
   activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
+  activeBeat: number, // NEW parameter
+  totalSlotsBeforeSection: number, // NEW parameter
 ) => {
   // --- Drag and Drop Handlers for Section ---
   const handleDragStart = (e: DragEvent) => {
@@ -282,6 +299,9 @@ const renderSection = (
     (e.currentTarget as HTMLElement).style.opacity = '1';
   };
 
+  // NEW: Calculate running beat index for measures
+  let currentTotalSlots = totalSlotsBeforeSection;
+
   return html`
     <div
       class="flex flex-col gap-2 p-3 bg-zinc-900 border border-zinc-700 rounded-lg cursor-grab"
@@ -303,54 +323,66 @@ const renderSection = (
         timeSignature: (e.target as HTMLSelectElement).value,
       });
     }}
-        >
-          ${TIME_SIGNATURES.map(
+      >
+        ${TIME_SIGNATURES.map(
       (sig) =>
         html`<option
-                .value=${sig}
-                ?selected=${sig === section.timeSignature}
-              >
-                ${sig}
+              .value=${sig}
+              ?selected=${sig === section.timeSignature}
+            >
+              ${sig}
            
- </option>`,
+</option>`,
     )}
-        </select>
-        <div class="flex gap-2">
-          <button
-            class="${secondaryButtonClasses} !h-8 !px-3 !text-xs"
-            @click=${() => {
+      </select>
+      <div class="flex gap-2">
+        <button
+          class="${secondaryButtonClasses} !h-8 !px-3 !text-xs"
+          @click=${() => {
       appActor.send({ type: "DUPLICATE_SECTION", sectionId: section.id });
     }}
-          >
-            Duplicate
-          </button>
-          <button
-            class="${destructiveButtonClasses} !h-8 !px-3 !text-xs"
-            @click=${() => {
+        >
+          Duplicate
+        </button>
+        <button
+          class="${destructiveButtonClasses} !h-8 !px-3 !text-xs"
+          @click=${() => {
       appActor.send({ type: "DELETE_SECTION", sectionId: section.id });
     }}
-          >
-            Delete Section
-          </button>
-        </div>
+        >
+          Delete Section
+        </button>
       </div>
-      <div class="flex gap-2 overflow-x-auto pb-2 items-center">
-        ${section.measures.map((measure) =>
-      renderMeasure(section, measure, chordsMap, activeSlot),
-    )}
-        <button
-          class="${secondaryButtonClasses} !h-12 !w-12 flex-shrink-0 flex items-center justify-center text-2xl"
-          @click=${() => {
+    </div>
+    <div class="flex gap-2 overflow-x-auto pb-2 items-center">
+      ${section.measures.map((measure) => {
+      const [beats, beatType] = section.timeSignature.split("/").map(Number);
+      const slotsPerMeasure = beats * (beatType === 8 ? 2 : 4);
+      const slotsBefore = currentTotalSlots;
+      currentTotalSlots += slotsPerMeasure; // Update running total for the next measure
+
+      return renderMeasure(
+        section,
+        measure,
+        chordsMap,
+        activeSlot,
+        activeBeat,
+        slotsBefore, // Pass the starting slot index
+      );
+    })}
+      <button
+        class="${secondaryButtonClasses} !h-12 !w-12 flex-shrink-0 flex items-center justify-center text-2xl"
+        @click=${() => {
       appActor.send({
         type: "ADD_MEASURE",
         sectionId: section.id
       });
     }}
-        >
-          +
-        </button>
-      </div>
+      >
+        +
+      </button>
     </div>
+  </div>
 `;
 };
 
@@ -358,10 +390,15 @@ export const VisualEditor = (
   currentPattern: PatternSection[],
   savedChords: SerializableChord[],
   activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
+  activeBeat: number, // NEW: Active beat from the machine
 ) => {
   const chordsMap = new Map(
     savedChords.filter((c) => c.id).map((c) => [c.id as string, c]),
   );
+
+  // NEW: Calculate total beat index across all sections
+  let totalSlotsBeforeSection = 0;
+
   const _handleKeyDown = (e: KeyboardEvent) => {
     const snapshot = appActor.getSnapshot();
     if (snapshot.context.activeSlot) {
@@ -393,9 +430,23 @@ export const VisualEditor = (
       <div
         class="gap-4 flex flex-wrap items-start p-4 border border-zinc-700 rounded-lg bg-zinc-950/50 min-h-[320px]"
       >
-        ${currentPattern.map((section) =>
-      renderSection(section, chordsMap, activeSlot),
-    )}
+        ${currentPattern.map((section) => {
+      const slotsBefore = totalSlotsBeforeSection;
+      // Calculate slots for the entire section
+      const slotsInSection = section.measures.reduce((acc, measure) => {
+        const [beats, beatType] = section.timeSignature.split("/").map(Number);
+        return acc + beats * (beatType === 8 ? 2 : 4);
+      }, 0);
+      totalSlotsBeforeSection += slotsInSection; // Update running total
+
+      return renderSection(
+        section,
+        chordsMap,
+        activeSlot,
+        activeBeat,
+        slotsBefore, // Pass the total index where this section starts
+      );
+    })}
         <button
           class="${secondaryButtonClasses} h-full flex-shrink-0 self-stretch"
           @click=${() => {
