@@ -30,7 +30,8 @@ const renderSlot = (
   const slotClasses = `
     relative group flex items-center justify-center rounded text-center border h-12 text-xs min-w-16
     ${isActive
-      ? "bg-teal-400/20 border-teal-400"
+      ?
+      "bg-teal-400/20 border-teal-400"
       : "bg-zinc-700/50 border-zinc-600 hover:border-zinc-400"
     }
     cursor-pointer transition-colors
@@ -51,24 +52,21 @@ const renderSlot = (
       dataToTransfer,
     );
     e.dataTransfer.effectAllowed = "move";
-
     // Set opacity directly within the event handler scope
     const target = e.currentTarget as HTMLElement;
     target.style.opacity = '0.4'; // Visual cue for the dragged element
   };
-
   // Handler for when a dragged chord is hovering over another slot
   const handleDragOver = (e: DragEvent) => {
-    e.preventDefault(); // This is necessary to allow a drop
+    e.preventDefault();
+    // This is necessary to allow a drop
     const target = e.currentTarget as HTMLElement;
-
     // Only provide a visual cue if the target slot is empty
     if (!chordId) {
       // Add yellow highlight classes to indicate a valid drop target
       if (!target.classList.contains("border-yellow-400")) {
         // Temporarily remove the zinc classes to ensure the yellow shows
         target.classList.remove("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
-
         target.classList.add("border-yellow-400", "bg-yellow-400/20");
       }
     } else {
@@ -80,10 +78,8 @@ const renderSlot = (
   // Handler for when a dragged chord leaves the hover area of another slot
   const handleDragLeave = (e: DragEvent) => {
     const target = e.currentTarget as HTMLElement;
-
     // Remove the yellow highlight classes
     target.classList.remove("border-yellow-400", "bg-yellow-400/20");
-
     // Restore the original zinc classes
     if (!isActive) {
       target.classList.add("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
@@ -112,7 +108,6 @@ const renderSlot = (
       return;
     }
     const source = JSON.parse(sourceData);
-
     // Send the event to the state machine to move the chord
     appActor.send({
       type: "MOVE_CHORD",
@@ -125,6 +120,7 @@ const renderSlot = (
         sectionId: sectionId,
         measureId: measure.id,
         slotIndex: slotIndex,
+
       },
     });
   };
@@ -138,7 +134,8 @@ const renderSlot = (
   return html`
     <div
       class=${slotClasses}
-      draggable=${chord ? "true" : "false"}
+      draggable=${chord ?
+      "true" : "false"}
       @dragstart=${handleDragStart}
       @dragover=${handleDragOver}
       @dragleave=${handleDragLeave}
@@ -154,7 +151,8 @@ const renderSlot = (
     }}
     >
       ${chord
-      ? html`<span class="font-medium text-zinc-200">${chord.name}</span>`
+      ?
+      html`<span class="font-medium text-zinc-200">${chord.name}</span>`
       : html`<span class="text-zinc-600">+</span>`}
 
       <button
@@ -169,11 +167,13 @@ const renderSlot = (
       });
     }}
       >
-        ${chord ? "✎" : "+"}
+        ${chord ?
+      "✎" : "+"}
       </button>
 
       ${chord
-      ? html`
+      ?
+      html`
             <button
               class="absolute top-0 right-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-red-600 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-all text-sm"
               @click=${(e: Event) => {
@@ -187,7 +187,7 @@ const renderSlot = (
         }}
             >
               &times;
-            </button>
+</button>
           `
       : nothing}
     </div>
@@ -210,7 +210,7 @@ const renderMeasure = (
       <div
         class="grid gap-2 h-full"
         style="grid-template-columns: repeat(${beats}, minmax(0, 1fr));"
-      >
+>
         ${beatSlots.map(
     (slots, beatIndex) => html`
             <div
@@ -218,7 +218,8 @@ const renderMeasure = (
               style="grid-template-columns: repeat(${subdivisions}, minmax(0, 1fr));"
             >
               ${slots.map((_, subdivisionIndex) => {
-      const slotIndex = beatIndex * subdivisions + subdivisionIndex;
+      const slotIndex = beatIndex * subdivisions
+        + subdivisionIndex;
       return renderSlot(
         section.id,
         measure,
@@ -239,65 +240,120 @@ const renderSection = (
   section: PatternSection,
   chordsMap: Map<string, SerializableChord>,
   activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
-) => html`
-  <div
-    class="flex flex-col gap-2 p-3 bg-zinc-900 border border-zinc-700 rounded-lg"
-  >
-    <div class="flex justify-between items-center mb-2">
-      <select
-        class="${baseInputClasses} !h-8 !py-0 w-24"
-        @change=${(e: Event) => {
-    appActor.send({
-      type: "UPDATE_SECTION_TIME_SIGNATURE",
-      sectionId: section.id,
-      timeSignature: (e.target as HTMLSelectElement).value,
-    });
-  }}
-      >
-        ${TIME_SIGNATURES.map(
-    (sig) =>
-      html`<option
-              .value=${sig}
-              ?selected=${sig === section.timeSignature}
-            >
-              ${sig}
-            </option>`,
-  )}
-      </select>
-      <div class="flex gap-2">
-        <button
-          class="${secondaryButtonClasses} !h-8 !px-3 !text-xs"
-          @click=${() => {
-    appActor.send({ type: "DUPLICATE_SECTION", sectionId: section.id });
-  }}
+) => {
+  // --- Drag and Drop Handlers for Section ---
+  const handleDragStart = (e: DragEvent) => {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.setData("text/plain", section.id);
+    e.dataTransfer.effectAllowed = "move";
+    // Add visual cue
+    (e.currentTarget as HTMLElement).style.opacity = '0.4';
+  };
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault(); // Allow drop
+    const sourceId = e.dataTransfer?.getData("text/plain");
+    // Only apply visual cue if not dragging onto itself
+    if (sourceId !== section.id) {
+      (e.currentTarget as HTMLElement).classList.add('border-dashed', 'border-teal-400');
+    }
+  };
+
+  const handleDragLeave = (e: DragEvent) => {
+    (e.currentTarget as HTMLElement).classList.remove('border-dashed', 'border-teal-400');
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).classList.remove('border-dashed', 'border-teal-400');
+
+    const sourceId = e.dataTransfer?.getData("text/plain");
+    if (sourceId && sourceId !== section.id) {
+      appActor.send({
+        type: "MOVE_SECTION",
+        sourceId: sourceId,
+        targetId: section.id,
+      });
+    }
+  };
+
+  const handleDragEnd = (e: DragEvent) => {
+    // Reset visual cue on the source element
+    (e.currentTarget as HTMLElement).style.opacity = '1';
+  };
+
+  return html`
+    <div
+      class="flex flex-col gap-2 p-3 bg-zinc-900 border border-zinc-700 rounded-lg cursor-grab"
+      draggable="true"
+      @dragstart=${handleDragStart}
+      @dragover=${handleDragOver}
+      @dragleave=${handleDragLeave}
+      @drop=${handleDrop}
+      @dragend=${handleDragEnd}
+    >
+      <div class="flex justify-between items-center mb-2">
+        <select
+          class="${baseInputClasses} !h-8 !py-0 w-24"
+          @change=${(e: Event) => {
+      appActor.send({
+        type: "UPDATE_SECTION_TIME_SIGNATURE",
+        sectionId: section.id,
+
+        timeSignature: (e.target as HTMLSelectElement).value,
+      });
+    }}
         >
-          Duplicate
-        </button>
+          ${TIME_SIGNATURES.map(
+      (sig) =>
+        html`<option
+                .value=${sig}
+                ?selected=${sig === section.timeSignature}
+              >
+                ${sig}
+           
+ </option>`,
+    )}
+        </select>
+        <div class="flex gap-2">
+          <button
+            class="${secondaryButtonClasses} !h-8 !px-3 !text-xs"
+            @click=${() => {
+      appActor.send({ type: "DUPLICATE_SECTION", sectionId: section.id });
+    }}
+          >
+            Duplicate
+          </button>
+          <button
+            class="${destructiveButtonClasses} !h-8 !px-3 !text-xs"
+            @click=${() => {
+      appActor.send({ type: "DELETE_SECTION", sectionId: section.id });
+    }}
+          >
+            Delete Section
+          </button>
+        </div>
+      </div>
+      <div class="flex gap-2 overflow-x-auto pb-2 items-center">
+        ${section.measures.map((measure) =>
+      renderMeasure(section, measure, chordsMap, activeSlot),
+    )}
         <button
-          class="${destructiveButtonClasses} !h-8 !px-3 !text-xs"
+          class="${secondaryButtonClasses} !h-12 !w-12 flex-shrink-0 flex items-center justify-center text-2xl"
           @click=${() => {
-    appActor.send({ type: "DELETE_SECTION", sectionId: section.id });
-  }}
+      appActor.send({
+        type: "ADD_MEASURE",
+        sectionId: section.id
+      });
+    }}
         >
-          Delete Section
+          +
         </button>
       </div>
     </div>
-    <div class="flex gap-2 overflow-x-auto pb-2 items-center">
-      ${section.measures.map((measure) =>
-    renderMeasure(section, measure, chordsMap, activeSlot),
-  )}
-      <button
-        class="${secondaryButtonClasses} !h-12 !w-12 flex-shrink-0 flex items-center justify-center text-2xl"
-        @click=${() => {
-    appActor.send({ type: "ADD_MEASURE", sectionId: section.id });
-  }}
-      >
-        +
-      </button>
-    </div>
-  </div>
 `;
+};
+
 export const VisualEditor = (
   currentPattern: PatternSection[],
   savedChords: SerializableChord[],
@@ -343,7 +399,9 @@ export const VisualEditor = (
         <button
           class="${secondaryButtonClasses} h-full flex-shrink-0 self-stretch"
           @click=${() => {
-      appActor.send({ type: "ADD_SECTION" });
+      appActor.send({
+        type: "ADD_SECTION"
+      });
     }}
         >
           + Add Section
