@@ -44,6 +44,7 @@ export type AppEvent =
   | { type: "ADD_MEASURE"; sectionId: string }
   | { type: "UPDATE_SECTION_TIME_SIGNATURE"; sectionId: string; timeSignature: string }
   | { type: "DELETE_SECTION"; sectionId: string }
+  | { type: "DUPLICATE_SECTION"; sectionId: string } // <-- NEW EVENT
   | { type: "SELECT_SLOT"; sectionId: string; measureId: string; slotIndex: number }
   | { type: "HIGHLIGHT_SLOT"; sectionId: string; measureId: string; slotIndex: number }
   | { type: "CLEAR_SLOT"; sectionId: string; measureId: string; slotIndex: number }
@@ -154,9 +155,11 @@ const safeParsePattern = (notesJson: string): PatternSection[] => {
 const getSlotsForTimeSignature = (timeSignature: string): number => {
   const [beats, beatType] = timeSignature.split("/").map(Number);
   if (beatType === 8) {
-    return beats * 2; // Each 8th note gets two 16th note slots
+    return beats * 2;
+    // Each 8th note gets two 16th note slots
   }
-  return beats * 4; // Each 4th note gets four 16th note slots
+  return beats * 4;
+  // Each 4th note gets four 16th note slots
 };
 
 // 4. MACHINE DEFINITION (with setup)
@@ -691,6 +694,40 @@ export const appMachine = setup({
         activeSlot: null,
       }),
     },
+    DUPLICATE_SECTION: { // <-- NEW ACTION
+      actions: assign({
+        currentPattern: ({ context, event }) => {
+          const sectionToDuplicate = context.currentPattern.find(
+            (s) => s.id === event.sectionId,
+          );
+          if (!sectionToDuplicate) return context.currentPattern;
+
+          // Deep copy the section to ensure slots/measures are new objects
+          let newSection: PatternSection = JSON.parse(
+            JSON.stringify(sectionToDuplicate),
+          );
+
+          // 1. Assign a new ID to the section
+          newSection.id = nanoid();
+
+          // 2. Assign new IDs to all measures within the section
+          newSection.measures = newSection.measures.map((measure: Measure) => ({
+            ...measure,
+            id: nanoid(),
+          }));
+
+          // Find the index of the original section
+          const originalIndex = context.currentPattern.findIndex(
+            (s) => s.id === event.sectionId,
+          );
+
+          // Insert the duplicated section right after the original
+          const newPattern = [...context.currentPattern];
+          newPattern.splice(originalIndex + 1, 0, newSection);
+          return newPattern;
+        },
+      }),
+    },
     UPDATE_SECTION_TIME_SIGNATURE: {
       actions: assign({
         currentPattern: ({ context, event }) =>
@@ -717,7 +754,6 @@ export const appMachine = setup({
         currentPattern: ({ context, event }) => {
           const { source, target } = event;
           const { currentPattern } = context;
-
           const sourceSection = currentPattern.find(
             (s) => s.id === source.sectionId,
           );
@@ -730,7 +766,6 @@ export const appMachine = setup({
 
           if (chordIdToMove === null || chordIdToMove === undefined)
             return currentPattern;
-
           const newPattern = JSON.parse(JSON.stringify(currentPattern));
 
           const newSourceSection = newPattern.find(

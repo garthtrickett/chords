@@ -38,10 +38,8 @@ const renderSlot = (
   // Handler for when dragging of a chord slot begins
   const handleDragStart = (e: DragEvent) => {
     if (!chordId || !e.dataTransfer) {
-      console.log(`[DRAG] Start cancelled: Slot ${slotIndex} is empty or no dataTransfer.`);
       return;
     }
-    console.log(`[DRAG] Drag Start: Source Slot [S:${sectionId}, M:${measure.id}, Slot:${slotIndex}]`);
     // Set the data to be transferred (the source location of the chord)
     const dataToTransfer = JSON.stringify({
       sectionId,
@@ -53,12 +51,10 @@ const renderSlot = (
       dataToTransfer,
     );
     e.dataTransfer.effectAllowed = "move";
-    console.log(`[DRAG] Drag Data Set: ${dataToTransfer}`);
 
     // Set opacity directly within the event handler scope
     const target = e.currentTarget as HTMLElement;
     target.style.opacity = '0.4'; // Visual cue for the dragged element
-    console.log(`[DRAG] Set opacity to 0.4 for dragged slot ${slotIndex}`);
   };
 
   // Handler for when a dragged chord is hovering over another slot
@@ -66,20 +62,16 @@ const renderSlot = (
     e.preventDefault(); // This is necessary to allow a drop
     const target = e.currentTarget as HTMLElement;
 
-    console.log(`[DRAG] Drag Over: Target Slot [S:${sectionId}, M:${measure.id}, Slot:${slotIndex}] Target ClassList: ${target.classList}`);
-
     // Only provide a visual cue if the target slot is empty
     if (!chordId) {
       // Add yellow highlight classes to indicate a valid drop target
       if (!target.classList.contains("border-yellow-400")) {
-        // 💡 FIX: Temporarily remove the zinc classes to ensure the yellow shows
+        // Temporarily remove the zinc classes to ensure the yellow shows
         target.classList.remove("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
 
         target.classList.add("border-yellow-400", "bg-yellow-400/20");
-        console.log(`[DRAG] Added visual cue to empty slot ${slotIndex} (Removed conflicting zinc classes)`);
       }
     } else {
-      console.log(`[DRAG] Drag Over ignored: Target slot ${slotIndex} is occupied.`);
       // Ensure no yellow cue is applied to occupied slots
       target.classList.remove("border-yellow-400", "bg-yellow-400/20");
     }
@@ -89,17 +81,13 @@ const renderSlot = (
   const handleDragLeave = (e: DragEvent) => {
     const target = e.currentTarget as HTMLElement;
 
-    console.log(`[DRAG] Drag Leave: Target Slot [S:${sectionId}, M:${measure.id}, Slot:${slotIndex}] Target ClassList: ${target.classList}`);
-
     // Remove the yellow highlight classes
     target.classList.remove("border-yellow-400", "bg-yellow-400/20");
 
-    // 💡 FIX: Restore the original zinc classes
+    // Restore the original zinc classes
     if (!isActive) {
       target.classList.add("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
     }
-
-    console.log(`[DRAG] Removed visual cue from slot ${slotIndex} (Restored conflicting zinc classes)`);
   };
 
   // Handler for when a chord is dropped onto a slot
@@ -108,28 +96,22 @@ const renderSlot = (
     const target = e.currentTarget as HTMLElement;
     // Clean up the visual cue
     target.classList.remove("border-yellow-400", "bg-yellow-400/20");
-    // 💡 FIX: Restore zinc classes on drop if not active
+    // Restore zinc classes on drop if not active
     if (!isActive) {
       target.classList.add("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
     }
 
-    console.log(`[DRAG] Drop: Target Slot [S:${sectionId}, M:${measure.id}, Slot:${slotIndex}]`);
-
     // Prevent dropping a chord onto a slot that is already occupied
     if (chordId) {
-      console.log(`[DRAG] Drop rejected: Target slot ${slotIndex} is occupied.`);
       return;
     }
 
     // Get the source data from the drag event
     const sourceData = e.dataTransfer?.getData("application/json");
     if (!sourceData) {
-      console.log(`[DRAG] Drop rejected: No data transferred.`);
       return;
     }
     const source = JSON.parse(sourceData);
-
-    console.log(`[DRAG] Drop successful. Moving from [S:${source.sectionId}, M:${source.measureId}, Slot:${source.slotIndex}]`);
 
     // Send the event to the state machine to move the chord
     appActor.send({
@@ -149,10 +131,8 @@ const renderSlot = (
 
   // Handler for when dragging of a chord slot ends
   const handleDragEnd = (e: DragEvent) => {
-    console.log(`[DRAG] Drag End: Source Slot [S:${sectionId}, M:${measure.id}, Slot:${slotIndex}]`);
     const target = e.currentTarget as HTMLElement;
     target.style.opacity = '1'; // Reset opacity
-    console.log(`[DRAG] Reset opacity to 1 for dragged slot ${slotIndex}`);
   };
 
   return html`
@@ -165,7 +145,6 @@ const renderSlot = (
       @drop=${handleDrop}
       @dragend=${handleDragEnd}
       @click=${() => {
-      console.log(`[CLICK] Activating Slot [S:${sectionId}, M:${measure.id}, Slot:${slotIndex}]`);
       appActor.send({
         type: "HIGHLIGHT_SLOT",
         sectionId,
@@ -182,7 +161,6 @@ const renderSlot = (
         class="absolute top-0 left-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-teal-600 text-white rounded-br-lg opacity-0 group-hover:opacity-100 transition-all text-xs font-bold"
         @click=${(e: Event) => {
       e.stopPropagation();
-      console.log(`[BUTTON] Selecting Slot for Chord Dialog [S:${sectionId}, M:${measure.id}, Slot:${slotIndex}]`);
       appActor.send({
         type: "SELECT_SLOT",
         sectionId,
@@ -200,7 +178,6 @@ const renderSlot = (
               class="absolute top-0 right-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-red-600 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-all text-sm"
               @click=${(e: Event) => {
           e.stopPropagation();
-          console.log(`[BUTTON] Clearing Slot [S:${sectionId}, M:${measure.id}, Slot:${slotIndex}]`);
           appActor.send({
             type: "CLEAR_SLOT",
             sectionId,
@@ -270,7 +247,6 @@ const renderSection = (
       <select
         class="${baseInputClasses} !h-8 !py-0 w-24"
         @change=${(e: Event) => {
-    console.log(`[INPUT] Update Section Time Sig: ${section.id} to ${(e.target as HTMLSelectElement).value}`);
     appActor.send({
       type: "UPDATE_SECTION_TIME_SIGNATURE",
       sectionId: section.id,
@@ -288,15 +264,24 @@ const renderSection = (
             </option>`,
   )}
       </select>
-      <button
-        class="${destructiveButtonClasses} !h-8 !px-3 !text-xs"
-        @click=${() => {
-    console.log(`[BUTTON] Deleting Section: ${section.id}`);
+      <div class="flex gap-2">
+        <button
+          class="${secondaryButtonClasses} !h-8 !px-3 !text-xs"
+          @click=${() => {
+    appActor.send({ type: "DUPLICATE_SECTION", sectionId: section.id });
+  }}
+        >
+          Duplicate
+        </button>
+        <button
+          class="${destructiveButtonClasses} !h-8 !px-3 !text-xs"
+          @click=${() => {
     appActor.send({ type: "DELETE_SECTION", sectionId: section.id });
   }}
-      >
-        Delete Section
-      </button>
+        >
+          Delete Section
+        </button>
+      </div>
     </div>
     <div class="flex gap-2 overflow-x-auto pb-2 items-center">
       ${section.measures.map((measure) =>
@@ -305,7 +290,6 @@ const renderSection = (
       <button
         class="${secondaryButtonClasses} !h-12 !w-12 flex-shrink-0 flex items-center justify-center text-2xl"
         @click=${() => {
-    console.log("[BUTTON] Adding Measure to Section: ${section.id}");
     appActor.send({ type: "ADD_MEASURE", sectionId: section.id });
   }}
       >
@@ -327,16 +311,12 @@ export const VisualEditor = (
     if (snapshot.context.activeSlot) {
       if (e.ctrlKey && e.key === "c") {
         e.preventDefault();
-        console.log("[KEYDOWN] Ctrl+C (Copy Slot)");
         appActor.send({ type: "COPY_SLOT" });
       }
       if (e.ctrlKey && e.key === "v") {
         e.preventDefault();
-        console.log("[KEYDOWN] Ctrl+V (Paste Slot)");
         if (snapshot.context.clipboardChordId) {
           appActor.send({ type: "PASTE_SLOT" });
-        } else {
-          console.log("[KEYDOWN] Paste failed: Clipboard is empty.");
         }
       }
     }
@@ -350,10 +330,7 @@ export const VisualEditor = (
       const target = e.target as HTMLElement;
       // Check if the click occurred on the editor container itself, not an interactive child.
       if (!target.closest('[class*="cursor-pointer"], button, select, input, form')) {
-        console.log("[CLICK] Clearing slot selection (Click on background)");
         appActor.send({ type: "CLEAR_SLOT_SELECTION" });
-      } else {
-        console.log(`[CLICK] Click on interactive element: ${target.tagName}`);
       }
     }}
     >
@@ -366,7 +343,6 @@ export const VisualEditor = (
         <button
           class="${secondaryButtonClasses} h-full flex-shrink-0 self-stretch"
           @click=${() => {
-      console.log("[BUTTON] Adding Section");
       appActor.send({ type: "ADD_SECTION" });
     }}
         >
