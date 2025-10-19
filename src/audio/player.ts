@@ -1,15 +1,38 @@
 // src/audio/player.ts
 import {
   getTransport,
-  Synth,
-  PolySynth,
   Part,
   start as startAudio,
+  Sampler,
 } from "tone";
 import type { NoteEvent } from "../../types/app";
 
 // --- TONE.JS SETUP ---
-const synth = new PolySynth(Synth).toDestination();
+const pianoSampler = new Sampler({
+  urls: {
+    C4: "C4.mp3",
+    "D#4": "Ds4.mp3",
+    "F#4": "Fs4.mp3",
+    A4: "A4.mp3",
+  },
+  release: 1,
+  baseUrl: "https://tonejs.github.io/audio/salamander/",
+}).toDestination();
+
+const guitarSampler = new Sampler({
+  urls: {
+    E2: "guitar_LowEstring1.mp3",
+    A2: "guitar_Astring.mp3",
+    D3: "guitar_Dstring.mp3",
+    G3: "guitar_Gstring.mp3",
+    B3: "guitar_Bstring.mp3",
+    E4: "guitar_highEstring.mp3",
+  },
+  release: 1,
+  baseUrl: "https://tonejs.github.io/audio/berklee/",
+}).toDestination();
+
+let activeSynth: Sampler = pianoSampler; // Default to piano
 const transport = getTransport();
 let part: Part<NoteEvent & { index: number }>;
 
@@ -25,10 +48,20 @@ export function parseCode(code: string): NoteEvent[] {
 }
 
 // --- PLAYER FUNCTIONS ---
+export function setInstrument(instrument: "piano" | "guitar") {
+  if (instrument === "piano") {
+    activeSynth = pianoSampler;
+  } else {
+    activeSynth = guitarSampler;
+  }
+}
+
 export function initializePlayer(initialNotes: NoteEvent[]) {
   part = new Part<NoteEvent & { index: number }>((time, value) => {
     // Schedule the note to be played by the synth
-    synth.triggerAttackRelease(value.note, value.duration, time);
+    if (activeSynth.loaded) {
+      activeSynth.triggerAttackRelease(value.note, value.duration, time);
+    }
 
     // Visual feedback: highlight the currently playing note element
     const el = document.getElementById(`note-${value.index}`);

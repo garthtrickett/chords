@@ -17,6 +17,7 @@ export const Controls = (props: {
   viewMode: "json" | "visual";
   keyRoot: string;
   keyType: "major" | "minor";
+  instrument: "piano" | "guitar";
 }) => html`<div
   class="mt-6 flex flex-col sm:flex-row flex-wrap gap-4 items-center justify-between"
 >
@@ -100,7 +101,23 @@ export const Controls = (props: {
     New Pattern
   </button>
   ${props.selectedPatternId
-    ? html`<button
+    ? html`<div class="flex-shrink-0">
+          <label for="instrument-select" class="${labelClasses} text-center sm:text-left">Instrument</label>
+          <select
+            id="instrument-select"
+            class="${baseInputClasses} w-32"
+            @change=${(e: Event) => {
+        appActor.send({
+          type: "SET_INSTRUMENT",
+          instrument: (e.target as HTMLSelectElement).value as "piano" | "guitar",
+        });
+      }}
+          >
+            <option value="piano" ?selected=${props.instrument === "piano"}>Piano</option>
+            <option value="guitar" ?selected=${props.instrument === "guitar"}>Guitar</option>
+          </select>
+        </div>
+        <button
           class=${secondaryButtonClasses}
           @click=${() => appActor.send({ type: "TOGGLE_VIEW" })}
         >

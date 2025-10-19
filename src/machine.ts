@@ -21,6 +21,7 @@ export interface AppContext {
   editingTuningId: string | null;
   keyRoot: string;
   keyType: "major" | "minor";
+  instrument: "piano" | "guitar";
   chordBankFilterKey: string | null;
   chordBankFilterTuning: string | null;
 }
@@ -67,6 +68,7 @@ export type AppEvent =
   | { type: "LOAD_CHORD_INTO_PATTERN"; chordId: string }
   | { type: "SET_KEY_ROOT"; root: string }
   | { type: "SET_KEY_TYPE"; keyType: "major" | "minor" }
+  | { type: "SET_INSTRUMENT"; instrument: "piano" | "guitar" }
   | { type: "SET_CHORD_BANK_FILTER"; key: string }
   | { type: "SET_CHORD_BANK_FILTER_TUNING"; tuning: string }
   | { type: "CLEAR_CHORD_BANK_FILTERS" }
@@ -205,6 +207,7 @@ export const appMachine = setup({
     editingTuningId: null,
     keyRoot: "C",
     keyType: "major",
+    instrument: "piano",
     chordBankFilterKey: null,
     chordBankFilterTuning: null,
   },
@@ -635,6 +638,9 @@ export const appMachine = setup({
     },
     SET_KEY_TYPE: {
       actions: assign({ keyType: ({ event }) => event.keyType }),
+    },
+    SET_INSTRUMENT: {
+      actions: assign({ instrument: ({ event }) => event.instrument }),
     },
     SET_CHORD_BANK_FILTER: {
       actions: assign({ chordBankFilterKey: ({ event }) => event.key || null }),

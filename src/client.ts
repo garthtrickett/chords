@@ -58,11 +58,14 @@ const machineWithImplementations = appMachine.provide({
 // --- RENDER & HMR LOGIC ---
 let appActor: Actor<typeof machineWithImplementations>;
 let lastScheduledPattern = "";
+let lastInstrument = "";
+
 const getContainer = (id: string) => {
   const el = document.querySelector<HTMLElement>(id);
   if (!el) throw new Error(`Could not find container with id: ${id}`);
   return el;
 };
+
 // Encapsulate the rendering logic into a function
 const runApplication = () => {
   // Get all containers for dynamic content
@@ -76,7 +79,6 @@ const runApplication = () => {
 
   // Create and start the actor
   appActor = createActor(machineWithImplementations).start();
-
   // Initialize the audio player
   player.initializePlayer(
     player.parseCode(appActor.getSnapshot().context.currentPattern),
@@ -85,6 +87,13 @@ const runApplication = () => {
   // --- MAIN SUBSCRIPTION LOOP ---
   appActor.subscribe((snapshot) => {
     const selectedPatternId = selectors.selectSelectedPatternId(snapshot);
+    const instrument = selectors.selectInstrument(snapshot);
+
+    // --- Switch instrument if changed ---
+    if (instrument !== lastInstrument) {
+      player.setInstrument(instrument);
+      lastInstrument = instrument;
+    }
 
     // --- Render UI Components ---
     if (selectedPatternId) {
@@ -121,6 +130,7 @@ const runApplication = () => {
         viewMode: selectors.selectViewMode(snapshot),
         keyRoot: selectors.selectKeyRoot(snapshot),
         keyType: selectors.selectKeyType(snapshot),
+        instrument: instrument,
       }),
       controlsContainer,
     );
