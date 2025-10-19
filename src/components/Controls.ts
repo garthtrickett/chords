@@ -1,6 +1,7 @@
 // src/components/Controls.ts
 import { html, nothing } from "lit-html";
 import { appActor } from "../client";
+import * as player from "../audio/player"; // Import player to access new functions
 import {
   baseInputClasses,
   destructiveButtonClasses,
@@ -22,24 +23,32 @@ export const Controls = (props: {
   class="mt-6 flex flex-col sm:flex-row flex-wrap gap-4 items-center justify-between"
 >
   ${props.selectedPatternId
-    ? html`<div class="flex gap-4 items-center justify-center">
-        ${props.isAudioOn
-        ? html`<button
-              class=${destructiveButtonClasses}
-              @click=${() => appActor.send({ type: "STOP_AUDIO" })}
-            >
-              Stop Audio
-            </button>`
-        : html`<button
-              class=${primaryButtonClasses}
-              @click=${() => appActor.send({ type: "START_AUDIO" })}
-            >
-              Start Audio
-            </button>`}
+    ?
+    html`<div class="flex gap-4 items-center justify-center">
+        <button
+          class=${props.isAudioOn ? secondaryButtonClasses : primaryButtonClasses}
+          @click=${() => {
+        player.togglePlayback();
+        appActor.send({ type: "TOGGLE_PLAYBACK" });
+      }}
+        >
+          ${props.isAudioOn ? "Pause Playback" : "Start Playback"}
+        </button>
+
+        <button
+          class=${destructiveButtonClasses}
+          @click=${() => { // <-- REMOVED ?disabled=${!props.isAudioOn}
+        player.stopAndRewind();
+        appActor.send({ type: "STOP_AND_REWIND" });
+      }}
+        >
+          Stop & Rewind
+        </button>
       </div>`
     : html`<div></div>`}
   ${props.selectedPatternId
-    ? html`<div class="flex-shrink-0">
+    ?
+    html`<div class="flex-shrink-0">
         <label class="${labelClasses} text-center sm:text-left">Key</label>
         <div class="flex gap-2">
           <select
@@ -49,6 +58,7 @@ export const Controls = (props: {
           type: "SET_KEY_ROOT",
           root: (e.target as HTMLSelectElement).value,
         })}
+ 
           >
             ${ALL_NOTES.map(
           (note) =>
@@ -56,7 +66,8 @@ export const Controls = (props: {
                   ${note}
                 </option>`,
         )}
-          </select>
+          
+</select>
           <select
             class="${baseInputClasses} w-28"
             @change=${(e: Event) =>
@@ -65,6 +76,7 @@ export const Controls = (props: {
           keyType: (e.target as HTMLSelectElement).value as
             | "major"
             | "minor",
+
         })}
           >
             <option value="major" ?selected=${props.keyType === "major"}>
@@ -73,6 +85,7 @@ export const Controls = (props: {
             <option value="minor" ?selected=${props.keyType === "minor"}>
               Minor
             </option>
+  
           </select>
         </div>
       </div>`
@@ -82,7 +95,8 @@ export const Controls = (props: {
   class="mt-6 flex flex-col sm:flex-row flex-wrap gap-4 items-center justify-center"
 >
   ${props.selectedPatternId
-    ? html`<input
+    ?
+    html`<input
         type="text"
         class="${baseInputClasses} flex-grow"
         placeholder="Pattern Name"
@@ -95,13 +109,15 @@ export const Controls = (props: {
       />`
     : nothing}
   <button
-    class=${secondaryButtonClasses}
+   
+  class=${secondaryButtonClasses}
     @click=${() => appActor.send({ type: "NEW_PATTERN" })}
   >
     New Pattern
   </button>
   ${props.selectedPatternId
-    ? html`<div class="flex-shrink-0">
+    ?
+    html`<div class="flex-shrink-0">
           <label for="instrument-select" class="${labelClasses} text-center sm:text-left">Instrument</label>
           <select
             id="instrument-select"
@@ -109,7 +125,8 @@ export const Controls = (props: {
             @change=${(e: Event) => {
         appActor.send({
           type: "SET_INSTRUMENT",
-          instrument: (e.target as HTMLSelectElement).value as "piano" | "guitar",
+          instrument: (e.target as HTMLSelectElement).value as "piano"
+            | "guitar",
         });
       }}
           >
@@ -120,8 +137,10 @@ export const Controls = (props: {
         <button
           class=${secondaryButtonClasses}
           @click=${() => appActor.send({ type: "TOGGLE_VIEW" })}
-        >
-          ${props.viewMode === "json" ? "Visual View" : "JSON View"}
+       
+  >
+          ${props.viewMode === "json" ?
+        "Visual View" : "JSON View"}
         </button>
         <button
           class=${primaryButtonClasses}
@@ -138,6 +157,7 @@ export const Controls = (props: {
               name: latest.context.patternName,
               content: JSON.stringify(latest.context.currentPattern),
               key_root: latest.context.keyRoot,
+
               key_type: latest.context.keyType,
               chord_palette: JSON.stringify(latest.context.chordPalette),
             },
@@ -145,7 +165,8 @@ export const Controls = (props: {
         }
       }}
         >
-          ${props.isSaving ? "Saving..." : "Save Pattern"}
+          ${props.isSaving ?
+        "Saving..." : "Save Pattern"}
         </button>`
     : nothing}
 </div>`;

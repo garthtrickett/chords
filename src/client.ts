@@ -102,7 +102,7 @@ const runApplication = () => {
             selectors.selectCurrentPatternAsJson(snapshot),
             selectors.selectSavedChords(snapshot),
             selectors.selectActiveSlot(snapshot),
-            selectors.selectActiveBeat(snapshot), // Pass active beat
+            selectors.selectActiveBeat(snapshot),
           ),
         editorContainer,
       );
@@ -179,7 +179,11 @@ const runApplication = () => {
     render(modalContent, modalContainer);
 
     // --- Audio Side-Effects ---
-    player.toggleAudio(selectors.selectIsAudioOn(snapshot));
+    // NOTE: The previous toggleAudio is replaced by logic in the controls
+    // component and is managed by TOGGLE_PLAYBACK/STOP_AND_REWIND events.
+
+    // player.toggleAudio(selectors.selectIsAudioOn(snapshot)); // REMOVED
+
     const currentPatternString = JSON.stringify(
       selectors.selectCurrentPatternAsJson(snapshot),
     );

@@ -39,8 +39,8 @@ export interface AppContext {
 
 // 2. EVENTS
 export type AppEvent =
-  | { type: "START_AUDIO" }
-  | { type: "STOP_AUDIO" }
+  | { type: "TOGGLE_PLAYBACK" } // MODIFIED: New general play/pause event
+  | { type: "STOP_AND_REWIND" } // NEW: Event to stop and set position to 0
   |
   { type: "UPDATE_PATTERN_STRUCTURE"; value: PatternSection[] }
   | { type: "ADD_SECTION" }
@@ -309,7 +309,7 @@ export const appMachine = setup({
     chordPalette: [],
     activeSlot: null,
     clipboardChordId: null,
-    activeBeat: -1, // NEW: Default to -1 (not playing)
+    activeBeat: -1,
   },
   states: {
     initializing: {
@@ -382,9 +382,27 @@ export const appMachine = setup({
             audio: {
               initial: "off",
               states: {
-
-                off: { on: { START_AUDIO: "on" }, entry: assign({ activeBeat: -1 }) }, // Reset beat on stop
-                on: { on: { STOP_AUDIO: "off" } },
+                // MODIFIED: 'off' state entry action is removed to keep 'activeBeat' value
+                off: {
+                  on: {
+                    TOGGLE_PLAYBACK: "on",
+                    // Only reset activeBeat when STOP_AND_REWIND is called
+                    STOP_AND_REWIND: {
+                      target: "off",
+                      actions: assign({ activeBeat: -1 }),
+                    },
+                  },
+                  // Note: No entry action means activeBeat is preserved when moving from 'on' to 'off'
+                },
+                on: {
+                  on: {
+                    TOGGLE_PLAYBACK: "off", // Pauses, moves to 'off' state, preserving beat
+                    STOP_AND_REWIND: {
+                      target: "off", // Moves to 'off' state, explicitly resets beat
+                      actions: assign({ activeBeat: -1 }),
+                    },
+                  },
+                },
               },
             },
             saveStatus: {
@@ -1161,7 +1179,6 @@ export const appMachine = setup({
     },
   },
 });
-
 
 
 
