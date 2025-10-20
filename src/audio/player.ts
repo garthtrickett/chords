@@ -202,9 +202,11 @@ export function updateTransportSchedule(
 export async function togglePlayback() {
   if (transport.state === "stopped" || transport.state === "paused") {
     await startAudio();
-    transport.start();
+    // Be explicit about starting from the current transport position.
+    // This ensures playback resumes correctly after a pause, even if BPM has changed.
+    transport.start(undefined, transport.position);
   } else {
-    // When pausing, we manually reset the beat index
+    // When pausing, we update the beat index in the state machine
     if (sendToMachine) {
       sendToMachine({
         type: "UPDATE_ACTIVE_BEAT",

@@ -67,20 +67,6 @@ export const Controls = (props: {
             <label class="${labelClasses} text-center sm:text-left">BPM</label>
             <div class="flex gap-2 items-center">
               <input
-                type="range"
-                min="40"
-                max="240"
-                .value=${props.bpm}
-                class="w-32 h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
-                @input=${(e: Event) => {
-        const newBpm = parseInt(
-          (e.target as HTMLInputElement).value,
-          10,
-        );
-        appActor.send({ type: "SET_BPM", value: newBpm });
-      }}
-              />
-              <input
                 type="number"
                 min="40"
                 max="240"
