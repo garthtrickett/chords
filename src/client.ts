@@ -59,6 +59,9 @@ let appActor: Actor<typeof machineWithImplementations>;
 let lastScheduledPattern = "";
 let lastInstrument = "";
 let lastBpm = 0;
+let savedScrollY = 0;
+let wasModalOpen = false;
+
 const getContainer = (id: string) => {
   const el = document.querySelector<HTMLElement>(id);
   if (!el) throw new Error(`Could not find container with id: ${id}`);
@@ -174,10 +177,11 @@ const runApplication = () => {
     );
 
     // --- Render Modals ---
+    const isModalNowOpen = selectors.selectIsSelectingChord(snapshot);
     let modalContent = html``;
     if (selectors.selectIsShowDialog(snapshot)) {
       modalContent = NewPatternDialog(selectors.selectNewPatternName(snapshot));
-    } else if (selectors.selectIsSelectingChord(snapshot)) {
+    } else if (isModalNowOpen) {
       modalContent = ChordSelectionDialog(
         selectors.selectChordPalette(snapshot),
         selectors.selectSavedChords(snapshot),
@@ -186,12 +190,15 @@ const runApplication = () => {
     }
     render(modalContent, modalContainer);
 
+    // --- SCROLL RESTORATION LOGIC ---
+    if (!wasModalOpen && isModalNowOpen) {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: savedScrollY, behavior: "instant" });
+      });
+    }
+    wasModalOpen = isModalNowOpen;
+
     // --- Audio Side-Effects ---
-    // NOTE: The previous toggleAudio is replaced by logic in the controls
-    // component and is managed by TOGGLE_PLAYBACK/STOP_AND_REWIND events.
-
-    // player.toggleAudio(selectors.selectIsAudioOn(snapshot)); // REMOVED
-
     const currentPatternString = JSON.stringify(
       selectors.selectCurrentPatternAsJson(snapshot),
     );
@@ -255,6 +262,10 @@ if (import.meta.hot) {
     runApplication();
   });
 }
+
+export const setSavedScrollY = () => {
+  savedScrollY = window.scrollY;
+};
 
 // Export the actor so it can be used in other files if needed
 export { appActor };

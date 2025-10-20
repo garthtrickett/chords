@@ -7,9 +7,9 @@ import type {
 } from "./database";
 
 export interface NoteEvent {
-  time: string;
-  note: string;
-  duration: string;
+  time: number; // Start time in 16th note steps
+  note: string; // e.g., "C4"
+  duration: number; // Duration in 16th note steps
 }
 
 export interface Measure {
@@ -21,6 +21,7 @@ export interface PatternSection {
   id: string;
   timeSignature: string;
   measures: Measure[];
+  melody: NoteEvent[]; // NEW: Add melody data to each section
 }
 
 export type Pattern = BasePattern;

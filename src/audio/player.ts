@@ -1,13 +1,18 @@
 // src/audio/player.ts
-import { getTransport, start as startAudio, Sampler, Time } from "tone";
+import {
+  getTransport,
+  start as startAudio,
+  Sampler,
+  Time,
+  Synth,
+} from "tone";
 import type {
   PatternSection,
   SerializableChord,
   SerializableTuning,
 } from "../../types/app";
-// FIX: Import the necessary types from xstate and extract the Send type.
 import { type AnyActorRef } from "xstate";
-type AppSend = AnyActorRef["send"]; // Extract the function type from AnyActorRef
+type AppSend = AnyActorRef["send"];
 
 // --- TONE.JS SETUP ---
 const pianoSampler = new Sampler({
@@ -32,33 +37,19 @@ const guitarSampler = new Sampler({
   release: 1,
   baseUrl: "https://tonejs.github.io/audio/berklee/",
 }).toDestination();
+const melodySynth = new Synth().toDestination();
 let activeSynth: Sampler = pianoSampler;
 const transport = getTransport();
 let scheduledEventIds: number[] = [];
 let totalSlots = 0;
 let sendToMachine: AppSend | null = null;
-let beatCursorId: number | null = null; // NEW: Track the beat cursor ID separately
+let beatCursorId: number | null = null;
 
 // --- UTILITIES ---
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const NOTE_MAP: Record<string, number> = {
-  C: 0,
-  "C#": 1,
-  Db: 1,
-  D: 2,
-  "D#": 3,
-  Eb: 3,
-  E: 4,
-  F: 5,
-  "F#": 6,
-  Gb: 6,
-  G: 7,
-  "G#": 8,
-  Ab: 8,
-  A: 9,
-  "A#": 10,
-  Bb: 10,
-  B: 11,
+  C: 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, F: 5, "F#": 6,
+  Gb: 6, G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11,
 };
 function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
   const notes: string[] = [];
@@ -85,34 +76,26 @@ export function setBpm(newBpm: number) {
   transport.bpm.value = newBpm;
 }
 
-// MODIFIED: Use the imported AppSend type
 export function initializePlayer(send: AppSend) {
   sendToMachine = send;
   transport.loop = true;
   transport.loopStart = 0;
   transport.loopEnd = "1m";
-  transport.bpm.value = 120; // Default BPM
+  transport.bpm.value = 120;
 }
 
 function scheduleBeatCursor(totalDuration: number) {
   if (!sendToMachine || totalDuration === 0) return;
-
-  // Clear previous cursor if it exists
   if (beatCursorId !== null) {
     transport.clear(beatCursorId);
     beatCursorId = null;
   }
-
   const sixteenthNoteDuration = Time("16n").toSeconds();
-
-  // Use Tone.js loop to schedule beat updates
   const cursor = transport.scheduleRepeat(
-    (time: number) => {
-      // We use Tone.js's transport time to calculate the current beat index
+    () => {
       const currentBeat = Math.floor(
         (transport.seconds / sixteenthNoteDuration) % totalSlots,
       );
-
       if (sendToMachine) {
         sendToMachine({ type: "UPDATE_ACTIVE_BEAT", beat: currentBeat });
       }
@@ -120,8 +103,6 @@ function scheduleBeatCursor(totalDuration: number) {
     "16n",
     0,
   );
-
-  // Store the new cursor ID
   beatCursorId = cursor;
 }
 
@@ -130,52 +111,64 @@ export function updateTransportSchedule(
   chords: SerializableChord[],
   tunings: SerializableTuning[],
 ) {
-  // Clear only old note events. The beat cursor is now managed separately.
-  scheduledEventIds.forEach((id) => transport.clear(id));
-  scheduledEventIds = [];
+  // FIX: Stop transport and cancel all events to ensure a clean slate.
+  const wasPlaying = transport.state === "started";
+  transport.stop();
+  transport.cancel(0);
 
-  // Re-collect chord/note events
-  const noteEventIds: number[] = [];
+  // Reset internal tracking state
+  scheduledEventIds = [];
   totalSlots = 0;
+  let totalDuration = 0;
+
+  // Prepare data maps
   const chordsMap = new Map(chords.map((c) => [c.id, c]));
   const tuningsMap = new Map(tunings.map((t) => [t.name, t.notes.split(" ")]));
-  let totalDuration = 0;
-  const flatEventList: { time: number; notes: string[] }[] = [];
+  const sixteenthNoteDuration = Time("16n").toSeconds();
+  const flatChordEventList: { time: number; notes: string[] }[] = [];
+  const localEventIds: number[] = [];
 
+  // Recalculate duration, slots, and collect events for the new pattern
   pattern.forEach((section) => {
     const [beats, beatType] = section.timeSignature.split("/").map(Number);
     const subdivisionsPerBeat = beatType === 8 ? 2 : 4;
     const slotsPerMeasure = beats * subdivisionsPerBeat;
-    const sixteenthNoteDuration = Time("16n").toSeconds();
     const measureDuration = slotsPerMeasure * sixteenthNoteDuration;
+    const sectionStartTime = totalDuration;
 
     section.measures.forEach((measure) => {
       measure.slots.forEach((chordId, slotIndex) => {
         if (!chordId) return;
-
         const chord = chordsMap.get(chordId);
         if (!chord) return;
-
         const tuningNotes = tuningsMap.get(chord.tuning);
         if (!tuningNotes) return;
-
         const notesToPlay = calculateChordNotes(chord.tab, tuningNotes);
         const eventTime = totalDuration + slotIndex * sixteenthNoteDuration;
-
-        flatEventList.push({ time: eventTime, notes: notesToPlay });
+        flatChordEventList.push({ time: eventTime, notes: notesToPlay });
       });
       totalDuration += measureDuration;
-      totalSlots += slotsPerMeasure; // Count all slots
+      totalSlots += slotsPerMeasure;
+    });
+
+    (section.melody || []).forEach((noteEvent) => {
+      const startTime =
+        sectionStartTime + noteEvent.time * sixteenthNoteDuration;
+      const duration = noteEvent.duration * sixteenthNoteDuration;
+      const eventId = transport.schedule((time) => {
+        melodySynth.triggerAttackRelease(noteEvent.note, duration, time);
+      }, startTime);
+      localEventIds.push(eventId);
     });
   });
 
-  if (flatEventList.length > 0) {
-    flatEventList.forEach((event, index) => {
-      const isLastEvent = index === flatEventList.length - 1;
+  // Schedule collected chord events
+  if (flatChordEventList.length > 0) {
+    flatChordEventList.forEach((event, index) => {
+      const isLastEvent = index === flatChordEventList.length - 1;
       const duration = isLastEvent
         ? totalDuration - event.time
-        : flatEventList[index + 1].time - event.time;
-
+        : flatChordEventList[index + 1].time - event.time;
       const eventId = transport.schedule((time) => {
         if (activeSynth.loaded) {
           activeSynth.triggerAttackRelease(
@@ -185,40 +178,50 @@ export function updateTransportSchedule(
           );
         }
       }, event.time);
-      noteEventIds.push(eventId);
+      localEventIds.push(eventId);
     });
-    transport.loopEnd = totalDuration;
-  } else {
-    transport.loopEnd = "1m";
-    totalSlots = 1;
   }
 
-  scheduledEventIds = [...noteEventIds];
-  // Finally, schedule the beat cursor whenever the pattern changes
+  // FIX: Always set the loopEnd based on the calculated duration.
+  if (totalDuration > 0) {
+    transport.loopEnd = totalDuration;
+  } else {
+    transport.loopEnd = "1m"; // Default for empty pattern
+    totalSlots = 1; // Prevent division by zero
+  }
+
+  scheduledEventIds = localEventIds;
   scheduleBeatCursor(totalDuration);
+
+  // FIX: Rewind and reset beat counter after loading a new pattern
+  transport.position = 0;
+  if (sendToMachine) {
+    sendToMachine({ type: "UPDATE_ACTIVE_BEAT", beat: -1 });
+  }
+
+  // If the transport was playing before, start it again from the beginning.
+  if (wasPlaying) {
+    transport.start();
+  }
 }
 
-// NEW: Function to toggle (start/pause) playback
 export async function togglePlayback() {
   if (transport.state === "stopped" || transport.state === "paused") {
     await startAudio();
-    // Be explicit about starting from the current transport position.
-    // This ensures playback resumes correctly after a pause, even if BPM has changed.
     transport.start(undefined, transport.position);
   } else {
-    // When pausing, we update the beat index in the state machine
     if (sendToMachine) {
       sendToMachine({
         type: "UPDATE_ACTIVE_BEAT",
-        beat:
-          Math.floor((transport.seconds / Time("16n").toSeconds()) % totalSlots),
+        beat: Math.floor(
+          (transport.seconds / Time("16n").toSeconds()) % totalSlots,
+        ),
       });
     }
     transport.pause();
   }
 }
 
-// NEW: Function to stop playback and rewind
 export function stopAndRewind() {
   transport.stop();
   transport.position = 0;

@@ -1,10 +1,12 @@
 // src/components/VisualEditor.ts
 import { html, nothing } from "lit-html";
-import { appActor } from "../client";
+import { appActor, setSavedScrollY } from "../client";
+import * as selectors from "../state/selectors";
 import type {
   PatternSection,
   Measure,
   SerializableChord,
+  NoteEvent,
 } from "../../types/app";
 import {
   baseInputClasses,
@@ -24,6 +26,7 @@ const TIME_SIGNATURES = [
   "13/8",
   "15/8",
 ];
+
 const renderSlot = (
   sectionId: string,
   measure: Measure,
@@ -181,7 +184,9 @@ const renderSlot = (
       <button
         class="absolute top-0 left-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-blue-600 text-white rounded-br-lg opacity-0 group-hover:opacity-100 transition-all text-xs font-bold"
         @click=${(e: Event) => {
+      setSavedScrollY();
       e.stopPropagation();
+      e.preventDefault();
       appActor.send({
         type: "SELECT_SLOT",
         sectionId,
@@ -213,7 +218,6 @@ const renderSlot = (
   `;
 };
 
-// MODIFIED: Accepts the running total of slots before this measure
 const renderMeasure = (
   section: PatternSection,
   measure: Measure,
@@ -240,8 +244,7 @@ const renderMeasure = (
               style="grid-template-columns: repeat(${subdivisions}, minmax(0, 1fr));"
             >
               ${slots.map((_, subdivisionIndex) => {
-      const slotIndex =
-        beatIndex * subdivisions + subdivisionIndex;
+      const slotIndex = beatIndex * subdivisions + subdivisionIndex;
       const currentTotalSlotIndex =
         totalSlotsBeforeMeasure + slotIndex; // Calculate total index
 
@@ -263,9 +266,122 @@ const renderMeasure = (
   `;
 };
 
+const renderPianoRoll = (
+  section: PatternSection,
+  notesInKey: string[],
+  activeBeat: number,
+  totalSlotsBeforeSection: number,
+) => {
+  const [beatsPerMeasure, beatType] = section.timeSignature
+    .split("/")
+    .map(Number);
+  const subdivisions = beatType === 8 ? 2 : 4;
+  const slotsPerMeasure = beatsPerMeasure * subdivisions;
+  const totalSlots = section.measures.length * slotsPerMeasure;
+  const octaves = [4, 5]; // Let's display two octaves
+  const pianoRollNotes = octaves
+    .flatMap((octave) => notesInKey.map((note) => `${note}${octave}`))
+    .reverse(); // Reverse to have high notes on top
+
+  const handleCellClick = (time: number, note: string) => {
+    const existingNote = section.melody.find(
+      (n) => n.time === time && n.note === note,
+    );
+    if (existingNote) {
+      appActor.send({
+        type: "REMOVE_MELODY_NOTE",
+        sectionId: section.id,
+        note,
+        time,
+      });
+    } else {
+      appActor.send({
+        type: "ADD_MELODY_NOTE",
+        sectionId: section.id,
+        note: { time, note, duration: 1 },
+      });
+    }
+  };
+
+  return html`
+    <div class="mt-2 flex">
+      <div class="flex flex-col text-xs text-right pr-2">
+        ${pianoRollNotes.map(
+    (note) => html`<div
+            class="h-6 flex items-center justify-end ${note.includes("#")
+        ? "text-zinc-500"
+        : "text-zinc-300"}"
+          >
+            ${note}
+          </div>`,
+  )}
+      </div>
+      <div
+        class="relative grid bg-zinc-800 rounded-md overflow-x-auto"
+        style="grid-template-columns: repeat(${totalSlots}, 2rem); grid-template-rows: repeat(${pianoRollNotes.length}, 1.5rem);"
+      >
+        <!-- Grid lines -->
+        ${Array.from({ length: totalSlots }).map(
+    (_, time) =>
+      html`<div
+              class="absolute top-0 bottom-0 ${time % subdivisions === 0
+          ? "border-l border-zinc-600"
+          : "border-l border-zinc-700/50"}"
+              style="left: ${time * 2}rem;"
+            ></div>`,
+  )}
+        ${pianoRollNotes.map(
+    (note, noteIndex) =>
+      html`<div
+              class="absolute left-0 right-0 ${note.includes("#")
+          ? ""
+          : "border-b border-zinc-700/50"}"
+              style="top: ${noteIndex * 1.5}rem;"
+            ></div>`,
+  )}
+
+        <!-- Note Cells -->
+        ${pianoRollNotes.map(
+    (note, noteIndex) =>
+      html`${Array.from({ length: totalSlots }).map(
+        (_, time) =>
+          html`<div
+                  class="w-8 h-6"
+                  style="grid-column: ${time + 1}; grid-row: ${noteIndex + 1};"
+                  @click=${() => handleCellClick(time, note)}
+                ></div>`,
+      )}`,
+  )}
+
+        <!-- Placed Notes -->
+        ${section.melody.map((noteEvent) => {
+    const noteIndex = pianoRollNotes.indexOf(noteEvent.note);
+    if (noteIndex === -1) return nothing;
+    return html`<div
+            class="absolute h-6 bg-cyan-500/80 border border-cyan-400 rounded cursor-pointer"
+            style="top: ${noteIndex *
+      1.5}rem; left: ${noteEvent.time * 2}rem; width: ${noteEvent.duration *
+      2}rem;"
+            @click=${() => handleCellClick(noteEvent.time, noteEvent.note)}
+          ></div>`;
+  })}
+        <!-- Playhead -->
+        ${activeBeat >= totalSlotsBeforeSection &&
+      activeBeat < totalSlotsBeforeSection + totalSlots
+      ? html`<div
+              class="absolute top-0 bottom-0 w-0.5 bg-purple-400"
+              style="left: ${(activeBeat - totalSlotsBeforeSection) * 2}rem;"
+            ></div>`
+      : nothing}
+      </div>
+    </div>
+  `;
+};
+
 const renderSection = (
   section: PatternSection,
   chordsMap: Map<string, SerializableChord>,
+  notesInKey: string[],
   activeSlot: { sectionId: string; measureId: string; slotIndex: number } | null,
   activeBeat: number, // NEW parameter
   totalSlotsBeforeSection: number, // NEW parameter
@@ -325,22 +441,23 @@ const renderSection = (
 
   return html`
     <div
-      class="flex flex-col gap-2 p-3 bg-zinc-900 border border-zinc-700 rounded-lg cursor-grab"
-      draggable="true"
-      @dragstart=${handleDragStart}
-      @dragover=${handleDragOver}
-      @dragleave=${handleDragLeave}
-      @drop=${handleDrop}
-      @dragend=${handleDragEnd}
+      class="flex flex-col gap-2 p-3 bg-zinc-900 border border-zinc-700 rounded-lg"
     >
-      <div class="flex justify-between items-center mb-2">
+      <div
+        class="flex justify-between items-center mb-2 cursor-grab"
+        draggable="true"
+        @dragstart=${handleDragStart}
+        @dragover=${handleDragOver}
+        @dragleave=${handleDragLeave}
+        @drop=${handleDrop}
+        @dragend=${handleDragEnd}
+      >
         <select
           class="${baseInputClasses} !h-8 !py-0 w-24"
           @change=${(e: Event) => {
       appActor.send({
         type: "UPDATE_SECTION_TIME_SIGNATURE",
         sectionId: section.id,
-
         timeSignature: (e.target as HTMLSelectElement).value,
       });
     }}
@@ -407,6 +524,13 @@ const renderSection = (
           +
         </button>
       </div>
+      <!-- NEW: Piano Roll Renderer -->
+      ${renderPianoRoll(
+      section,
+      notesInKey,
+      activeBeat,
+      totalSlotsBeforeSection,
+    )}
     </div>
   `;
 };
@@ -420,6 +544,7 @@ export const VisualEditor = (
   const chordsMap = new Map(
     savedChords.filter((c) => c.id).map((c) => [c.id as string, c]),
   );
+  const notesInKey = selectors.selectNotesInCurrentKey(appActor.getSnapshot());
 
   // NEW: Calculate total beat index across all sections
   let totalSlotsBeforeSection = 0;
@@ -457,7 +582,7 @@ export const VisualEditor = (
     }}
     >
       <div
-        class="gap-4 flex flex-wrap items-start p-4 border border-zinc-700 rounded-lg bg-zinc-950/50 min-h-[320px]"
+        class="gap-4 flex flex-col items-stretch p-4 border border-zinc-700 rounded-lg bg-zinc-950/50 min-h-[320px]"
       >
         ${currentPattern.map((section) => {
       const slotsBefore = totalSlotsBeforeSection;
@@ -473,13 +598,14 @@ export const VisualEditor = (
       return renderSection(
         section,
         chordsMap,
+        notesInKey,
         activeSlot,
         activeBeat,
         slotsBefore, // Pass the total index where this section starts
       );
     })}
         <button
-          class="${secondaryButtonClasses} h-full flex-shrink-0 self-stretch"
+          class="${secondaryButtonClasses} h-12 w-full mt-2"
           @click=${() => {
       appActor.send({
         type: "ADD_SECTION",

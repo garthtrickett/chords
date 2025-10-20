@@ -48,6 +48,7 @@ export const patternRoutes = new Elysia({ prefix: "/patterns" })
         key_root: t.String(),
         key_type: t.String(),
         chord_palette: t.String(),
+        melody: t.String(), // NEW
       }),
     },
   )
@@ -75,6 +76,7 @@ export const patternRoutes = new Elysia({ prefix: "/patterns" })
         key_root: t.String(),
         key_type: t.String(),
         chord_palette: t.String(),
+        melody: t.String(), // NEW
       }),
       params: t.Object({ id: t.String() }),
     },

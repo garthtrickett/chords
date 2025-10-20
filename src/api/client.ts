@@ -76,6 +76,7 @@ export const createPatternEffect = (input: {
   key_root: string;
   key_type: string;
   chord_palette: string;
+  melody: string; // NEW
 }) =>
   Effect.promise(() => client.patterns.post(input)).pipe(
     Effect.flatMap((response) => {
@@ -100,8 +101,10 @@ export const updatePatternEffect = (input: {
   key_root: string;
   key_type: string;
   chord_palette: string;
+  melody: string; // NEW
 }) => {
-  const { id, name, content, key_root, key_type, chord_palette } = input;
+  const { id, name, content, key_root, key_type, chord_palette, melody } =
+    input;
   return Effect.promise(() =>
     client.patterns({ id }).put({
       name,
@@ -109,6 +112,7 @@ export const updatePatternEffect = (input: {
       key_root,
       key_type,
       chord_palette,
+      melody, // NEW
     }),
   ).pipe(
     Effect.flatMap((response) => {
@@ -208,7 +212,8 @@ export const createTuningEffect = (input: { name: string; notes: string }) =>
         return Effect.fail(
           new ApiError({
             message:
-              (response.error.value as any)?.error ?? "API error creating tuning",
+              (response.error.value as any)?.error ??
+              "API error creating tuning",
             cause: response.error,
           }),
         );

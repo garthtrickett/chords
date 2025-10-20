@@ -52,6 +52,7 @@ export const updatePattern = (
     key_root: string;
     key_type: string;
     chord_palette: string;
+    melody: string; // NEW
   },
 ) =>
   Effect.tryPromise({
@@ -90,7 +91,11 @@ export const deletePattern = (id: string) =>
 export const getAllChords = () =>
   Effect.tryPromise({
     try: () =>
-      db.selectFrom("chord").selectAll().orderBy("created_at", "desc").execute(),
+      db
+        .selectFrom("chord")
+        .selectAll()
+        .orderBy("created_at", "desc")
+        .execute(),
     catch: (cause) => new DatabaseError({ cause }),
   });
 
@@ -148,7 +153,11 @@ export const deleteChord = (id: string) =>
 export const getAllTunings = () =>
   Effect.tryPromise({
     try: () =>
-      db.selectFrom("tuning").selectAll().orderBy("created_at", "asc").execute(),
+      db
+        .selectFrom("tuning")
+        .selectAll()
+        .orderBy("created_at", "asc")
+        .execute(),
     catch: (cause) => new DatabaseError({ cause }),
   });
 
@@ -166,7 +175,10 @@ export const createTuning = (newTuning: InsertableTuning) =>
         : new DatabaseError({ cause: e }),
   });
 
-export const updateTuning = (id: string, data: { name: string; notes: string }) =>
+export const updateTuning = (
+  id: string,
+  data: { name: string; notes: string },
+) =>
   Effect.tryPromise({
     try: () =>
       db

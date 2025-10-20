@@ -192,11 +192,24 @@ export const Controls = (props: {
             input: {
               id: latest.context.selectedPatternId,
               name: latest.context.patternName,
-              content: JSON.stringify(latest.context.currentPattern),
+              content: JSON.stringify(
+                latest.context.currentPattern.map((s) => ({
+                  id: s.id,
+                  timeSignature: s.timeSignature,
+                  measures: s.measures,
+                })),
+              ),
               key_root: latest.context.keyRoot,
-
               key_type: latest.context.keyType,
-              chord_palette: JSON.stringify(latest.context.chordPalette),
+              chord_palette: JSON.stringify(
+                latest.context.chordPalette,
+              ),
+              melody: JSON.stringify(
+                latest.context.currentPattern.map((s) => ({
+                  id: s.id,
+                  melody: s.melody,
+                })),
+              ),
             },
           });
         }

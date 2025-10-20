@@ -13,15 +13,19 @@ export const ChordSelectionDialog = (
   savedChords: SerializableChord[],
   isSlotFilled: boolean,
 ) => {
+  console.log("[ChordSelectionDialog] Rendering dialog.");
   const chordsMap = new Map(savedChords.map((c) => [c.id, c]));
   const chordsInPalette = paletteChordIds
     .map((id) => chordsMap.get(id))
     .filter(Boolean) as SerializableChord[];
 
   return html`<div
-    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+    id="chord-selection-dialog"
+    tabindex="-1"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 focus:outline-none"
     @click=${(e: Event) => {
       if (e.currentTarget === e.target) {
+        console.log("[ChordSelectionDialog] Background clicked. Sending CANCEL_CHORD_SELECTION.");
         appActor.send({ type: "CANCEL_CHORD_SELECTION" });
       }
     }}
@@ -34,7 +38,9 @@ export const ChordSelectionDialog = (
         (chord) =>
           html`<button
                   class="p-4 text-base bg-zinc-800 hover:bg-zinc-700 rounded text-center"
-                  @click=${() => {
+                  @click=${(e: Event) => {
+              e.preventDefault();
+              console.log(`[ChordSelectionDialog] Chord button "${chord.name}" clicked. Sending ASSIGN_CHORD_TO_SLOT.`);
               if (chord.id) {
                 appActor.send({
                   type: "ASSIGN_CHORD_TO_SLOT",
@@ -42,9 +48,9 @@ export const ChordSelectionDialog = (
                 });
               }
             }}
-                  >
-                    ${chord.name}
-                  </button>`,
+                >
+                  ${chord.name}
+                </button>`,
       )}
           </div>`
       : html`<p class="text-zinc-400 text-center py-4">
@@ -55,7 +61,9 @@ export const ChordSelectionDialog = (
           ${isSlotFilled
       ? html`<button
                 class=${destructiveButtonClasses}
-                @click=${() => {
+                @click=${(e: Event) => {
+          e.preventDefault();
+          console.log("[ChordSelectionDialog] 'Remove Chord' button clicked. Sending CLEAR_SLOT.");
           const snapshot = appActor.getSnapshot();
           const { activeSlot } = snapshot.context;
           if (activeSlot) {
@@ -74,7 +82,11 @@ export const ChordSelectionDialog = (
         </div>
         <button
           class=${secondaryButtonClasses}
-          @click=${() => appActor.send({ type: "CANCEL_CHORD_SELECTION" })}
+          @click=${(e: Event) => {
+      e.preventDefault();
+      console.log("[ChordSelectionDialog] 'Cancel' button clicked. Sending CANCEL_CHORD_SELECTION.");
+      appActor.send({ type: "CANCEL_CHORD_SELECTION" });
+    }}
         >
           Cancel
         </button>

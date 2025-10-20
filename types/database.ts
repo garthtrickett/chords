@@ -18,6 +18,7 @@ export interface Pattern {
   id: string | null;
   key_root: Generated<string>;
   key_type: Generated<string>;
+  melody: Generated<string>; // NEW: Add melody column
   name: string;
   notes: string;
   updated_at: Generated<string>;
