@@ -12,15 +12,22 @@ type AppSend = AnyActorRef["send"]; // Extract the function type from AnyActorRe
 // --- TONE.JS SETUP ---
 const pianoSampler = new Sampler({
   urls: {
-    C4: "C4.mp3", "D#4": "Ds4.mp3", "F#4": "Fs4.mp3", A4: "A4.mp3",
+    C4: "C4.mp3",
+    "D#4": "Ds4.mp3",
+    "F#4": "Fs4.mp3",
+    A4: "A4.mp3",
   },
   release: 1,
   baseUrl: "https://tonejs.github.io/audio/salamander/",
 }).toDestination();
 const guitarSampler = new Sampler({
   urls: {
-    E2: "guitar_LowEstring1.mp3", A2: "guitar_Astring.mp3", D3: "guitar_Dstring.mp3",
-    G3: "guitar_Gstring.mp3", B3: "guitar_Bstring.mp3", E4: "guitar_highEstring.mp3",
+    E2: "guitar_LowEstring1.mp3",
+    A2: "guitar_Astring.mp3",
+    D3: "guitar_Dstring.mp3",
+    G3: "guitar_Gstring.mp3",
+    B3: "guitar_Bstring.mp3",
+    E4: "guitar_highEstring.mp3",
   },
   release: 1,
   baseUrl: "https://tonejs.github.io/audio/berklee/",
@@ -35,8 +42,23 @@ let beatCursorId: number | null = null; // NEW: Track the beat cursor ID separat
 // --- UTILITIES ---
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const NOTE_MAP: Record<string, number> = {
-  "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#": 6,
-  "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
+  C: 0,
+  "C#": 1,
+  Db: 1,
+  D: 2,
+  "D#": 3,
+  Eb: 3,
+  E: 4,
+  F: 5,
+  "F#": 6,
+  Gb: 6,
+  G: 7,
+  "G#": 8,
+  Ab: 8,
+  A: 9,
+  "A#": 10,
+  Bb: 10,
+  B: 11,
 };
 function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
   const notes: string[] = [];
@@ -56,8 +78,11 @@ function calculateChordNotes(tab: string, tuningNotes: string[]): string[] {
 
 // --- PLAYER FUNCTIONS ---
 export function setInstrument(instrument: "piano" | "guitar") {
-  activeSynth = instrument === "piano" ?
-    pianoSampler : guitarSampler;
+  activeSynth = instrument === "piano" ? pianoSampler : guitarSampler;
+}
+
+export function setBpm(newBpm: number) {
+  transport.bpm.value = newBpm;
 }
 
 // MODIFIED: Use the imported AppSend type
@@ -66,6 +91,7 @@ export function initializePlayer(send: AppSend) {
   transport.loop = true;
   transport.loopStart = 0;
   transport.loopEnd = "1m";
+  transport.bpm.value = 120; // Default BPM
 }
 
 function scheduleBeatCursor(totalDuration: number) {
@@ -80,19 +106,24 @@ function scheduleBeatCursor(totalDuration: number) {
   const sixteenthNoteDuration = Time("16n").toSeconds();
 
   // Use Tone.js loop to schedule beat updates
-  const cursor = transport.scheduleRepeat((time: number) => {
-    // We use Tone.js's transport time to calculate the current beat index
-    const currentBeat = Math.floor((transport.seconds / sixteenthNoteDuration) % totalSlots);
+  const cursor = transport.scheduleRepeat(
+    (time: number) => {
+      // We use Tone.js's transport time to calculate the current beat index
+      const currentBeat = Math.floor(
+        (transport.seconds / sixteenthNoteDuration) % totalSlots,
+      );
 
-    if (sendToMachine) {
-      sendToMachine({ type: "UPDATE_ACTIVE_BEAT", beat: currentBeat });
-    }
-  }, "16n", 0);
+      if (sendToMachine) {
+        sendToMachine({ type: "UPDATE_ACTIVE_BEAT", beat: currentBeat });
+      }
+    },
+    "16n",
+    0,
+  );
 
   // Store the new cursor ID
   beatCursorId = cursor;
 }
-
 
 export function updateTransportSchedule(
   pattern: PatternSection[],
@@ -126,8 +157,7 @@ export function updateTransportSchedule(
         if (!chord) return;
 
         const tuningNotes = tuningsMap.get(chord.tuning);
-        if
-          (!tuningNotes) return;
+        if (!tuningNotes) return;
 
         const notesToPlay = calculateChordNotes(chord.tab, tuningNotes);
         const eventTime = totalDuration + slotIndex * sixteenthNoteDuration;
@@ -149,7 +179,6 @@ export function updateTransportSchedule(
       const eventId = transport.schedule((time) => {
         if (activeSynth.loaded) {
           activeSynth.triggerAttackRelease(
-
             event.notes.map((n) => `${n}4`),
             duration,
             time,
@@ -177,7 +206,11 @@ export async function togglePlayback() {
   } else {
     // When pausing, we manually reset the beat index
     if (sendToMachine) {
-      sendToMachine({ type: "UPDATE_ACTIVE_BEAT", beat: Math.floor(transport.seconds / Time("16n").toSeconds()) % totalSlots });
+      sendToMachine({
+        type: "UPDATE_ACTIVE_BEAT",
+        beat:
+          Math.floor((transport.seconds / Time("16n").toSeconds()) % totalSlots),
+      });
     }
     transport.pause();
   }

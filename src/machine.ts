@@ -35,52 +35,61 @@ export interface AppContext {
   clipboardChordId: string | null;
   // NEW: Track the currently playing 16th note slot index
   activeBeat: number;
+  bpm: number;
 }
 
 // 2. EVENTS
 export type AppEvent =
   | { type: "TOGGLE_PLAYBACK" } // MODIFIED: New general play/pause event
   | { type: "STOP_AND_REWIND" } // NEW: Event to stop and set position to 0
-  |
-  { type: "UPDATE_PATTERN_STRUCTURE"; value: PatternSection[] }
+  | { type: "UPDATE_PATTERN_STRUCTURE"; value: PatternSection[] }
   | { type: "ADD_SECTION" }
   | {
     type: "ADD_MEASURE";
-    sectionId: string
+    sectionId: string;
   }
-  | { type: "UPDATE_SECTION_TIME_SIGNATURE"; sectionId: string; timeSignature: string }
+  | {
+    type: "UPDATE_SECTION_TIME_SIGNATURE";
+    sectionId: string;
+    timeSignature: string;
+  }
   | {
     type: "DELETE_SECTION";
-    sectionId: string
+    sectionId: string;
   }
   | { type: "DUPLICATE_SECTION"; sectionId: string } // <-- NEW EVENT
   | {
     type: "SELECT_SLOT";
-    sectionId: string; measureId: string; slotIndex: number
+    sectionId: string;
+    measureId: string;
+    slotIndex: number;
   }
   | {
-    type: "HIGHLIGHT_SLOT"; sectionId: string; measureId: string;
-    slotIndex: number
+    type: "HIGHLIGHT_SLOT";
+    sectionId: string;
+    measureId: string;
+    slotIndex: number;
   }
-  | { type: "CLEAR_SLOT"; sectionId: string; measureId: string; slotIndex: number }
-  |
-  { type: "CLEAR_SLOT_SELECTION" }
+  | {
+    type: "CLEAR_SLOT";
+    sectionId: string;
+    measureId: string;
+    slotIndex: number;
+  }
+  | { type: "CLEAR_SLOT_SELECTION" }
   | { type: "TOGGLE_CHORD_IN_PALETTE"; chordId: string }
   | {
     type: "ASSIGN_CHORD_TO_SLOT";
-    chordId: string
+    chordId: string;
   }
   | { type: "CANCEL_CHORD_SELECTION" }
   | { type: "UPDATE_PATTERN_NAME"; value: string }
-  |
-  { type: "SELECT_PATTERN"; id: string }
+  | { type: "SELECT_PATTERN"; id: string }
   | { type: "NEW_PATTERN" }
   | { type: "CANCEL_NEW_PATTERN" }
-  |
-  { type: "UPDATE_NEW_PATTERN_NAME"; value: string }
+  | { type: "UPDATE_NEW_PATTERN_NAME"; value: string }
   | { type: "CREATE_PATTERN"; name: string }
-  |
-  { type: "COPY_SLOT" }
+  | { type: "COPY_SLOT" }
   | { type: "PASTE_SLOT" }
   | {
     type: "MOVE_CHORD";
@@ -104,51 +113,50 @@ export type AppEvent =
     };
   }
   | { type: "DELETE_PATTERN"; id: string }
-  |
-  { type: "TOGGLE_VIEW" }
+  | { type: "TOGGLE_VIEW" }
   | {
-    type: "CREATE_CHORD"; input: {
-      name: string; tab: string;
-      tuning: string
-    }
+    type: "CREATE_CHORD";
+    input: {
+      name: string;
+      tab: string;
+      tuning: string;
+    };
   }
   | { type: "EDIT_CHORD"; id: string }
   | { type: "CANCEL_EDIT_CHORD" }
-  |
-  {
+  | {
     type: "UPDATE_CHORD";
     input: { id: string; name: string; tab: string; tuning: string };
   }
-  |
-  { type: "DELETE_CHORD"; id: string }
+  | { type: "DELETE_CHORD"; id: string }
   | {
-    type: "CREATE_TUNING"; input: {
+    type: "CREATE_TUNING";
+    input: {
       name: string;
-      notes: string
-    }
+      notes: string;
+    };
   }
   | {
     type: "UPDATE_TUNING";
     input: {
-      id: string; name: string;
-      notes: string
+      id: string;
+      name: string;
+      notes: string;
     };
   }
   | { type: "DELETE_TUNING"; id: string }
   | {
     type: "EDIT_TUNING";
-    id: string
+    id: string;
   }
   | { type: "CANCEL_EDIT_TUNING" }
   | { type: "SET_KEY_ROOT"; root: string }
-  |
-  { type: "SET_KEY_TYPE"; keyType: "major" | "minor" }
+  | { type: "SET_KEY_TYPE"; keyType: "major" | "minor" }
   | { type: "SET_INSTRUMENT"; instrument: "piano" | "guitar" }
-  |
-  { type: "SET_CHORD_BANK_FILTER"; key: string }
+  | { type: "SET_BPM"; value: number }
+  | { type: "SET_CHORD_BANK_FILTER"; key: string }
   | { type: "SET_CHORD_BANK_FILTER_TUNING"; tuning: string }
-  |
-  { type: "CLEAR_CHORD_BANK_FILTERS" }
+  | { type: "CLEAR_CHORD_BANK_FILTERS" }
   | {
     type: "UPDATE_ACTIVE_BEAT"; // <-- NEW EVENT
     beat: number;
@@ -163,38 +171,34 @@ export type AppEvent =
   }
   | {
     type: "error.platform.fetchInitialData";
-    error: unknown
+    error: unknown;
   }
   | { type: "done.invoke.updatePattern" }
   | { type: "error.platform.updatePattern"; error: unknown }
-  |
-  { type: "done.invoke.createPattern"; output: SerializablePattern }
+  | { type: "done.invoke.createPattern"; output: SerializablePattern }
   | { type: "error.platform.createPattern"; error: unknown }
-  |
-  { type: "done.invoke.deletePattern" }
+  | { type: "done.invoke.deletePattern" }
   | { type: "error.platform.deletePattern"; error: unknown }
   | {
     type: "done.invoke.createChord";
-    output: SerializableChord
+    output: SerializableChord;
   }
   | { type: "error.platform.createChord"; error: unknown }
   | { type: "done.invoke.updateChord" }
-  |
-  { type: "error.platform.updateChord"; error: unknown }
+  | { type: "error.platform.updateChord"; error: unknown }
   | { type: "done.invoke.deleteChord" }
   | {
     type: "error.platform.deleteChord";
-    error: unknown
+    error: unknown;
   }
   | { type: "done.invoke.createTuning"; output: SerializableTuning }
   | {
     type: "error.platform.createTuning";
-    error: unknown
+    error: unknown;
   }
   | { type: "done.invoke.updateTuning" }
   | { type: "error.platform.updateTuning"; error: unknown }
-  |
-  { type: "done.invoke.deleteTuning" }
+  | { type: "done.invoke.deleteTuning" }
   | { type: "error.platform.deleteTuning"; error: unknown };
 
 // 3. CONSTANTS
@@ -211,7 +215,10 @@ const safeParsePattern = (notesJson: string): PatternSection[] => {
     if (Array.isArray(parsed)) {
       if (
         parsed.length === 0 ||
-        (parsed[0] && parsed[0].id && parsed[0].timeSignature && parsed[0].measures)
+        (parsed[0] &&
+          parsed[0].id &&
+          parsed[0].timeSignature &&
+          parsed[0].measures)
       ) {
         return parsed;
       }
@@ -242,7 +249,13 @@ export const appMachine = setup({
     }>,
     createPattern: {} as PromiseActorLogic<
       SerializablePattern,
-      { name: string; notes: string; key_root: string; key_type: string; chord_palette: string }
+      {
+        name: string;
+        notes: string;
+        key_root: string;
+        key_type: string;
+        chord_palette: string;
+      }
     >,
 
     updatePattern: {} as PromiseActorLogic<
@@ -258,15 +271,16 @@ export const appMachine = setup({
     >,
     deletePattern: {} as PromiseActorLogic<void, { id: string }>,
     createChord: {} as PromiseActorLogic<
-
       SerializableChord,
       { name: string; tab: string; tuning: string }
     >,
     updateChord: {} as PromiseActorLogic<
       void,
       {
-        id: string; name: string; tab: string;
-        tuning: string
+        id: string;
+        name: string;
+        tab: string;
+        tuning: string;
       }
     >,
     deleteChord: {} as PromiseActorLogic<void, { id: string }>,
@@ -274,14 +288,15 @@ export const appMachine = setup({
       SerializableTuning,
       {
         name: string;
-        notes: string
+        notes: string;
       }
     >,
     updateTuning: {} as PromiseActorLogic<
       void,
       {
         id: string;
-        name: string; notes: string
+        name: string;
+        notes: string;
       }
     >,
     deleteTuning: {} as PromiseActorLogic<void, { id: string }>,
@@ -303,13 +318,13 @@ export const appMachine = setup({
     keyRoot: "C",
     keyType: "major",
     instrument: "piano",
-    chordBankFilterKey:
-      null,
+    chordBankFilterKey: null,
     chordBankFilterTuning: null,
     chordPalette: [],
     activeSlot: null,
     clipboardChordId: null,
     activeBeat: -1,
+    bpm: 120,
   },
   states: {
     initializing: {
@@ -319,40 +334,33 @@ export const appMachine = setup({
         onDone: {
           target: "running",
           actions: assign({
-            savedPatterns: ({
-              event }) => event.output.patterns,
+            savedPatterns: ({ event }) => event.output.patterns,
             savedChords: ({ event }) => event.output.chords,
             savedTunings: ({ event }) => event.output.tunings,
             currentPattern: ({ event }) =>
               event.output.patterns.length > 0
-                ?
-                safeParsePattern(event.output.patterns[0].notes)
+                ? safeParsePattern(event.output.patterns[0].notes)
                 : defaultPattern,
             patternName: ({ event }) =>
               event.output.patterns.length > 0
-                ?
-                event.output.patterns[0].name
+                ? event.output.patterns[0].name
                 : "",
             selectedPatternId: ({ event }) =>
               event.output.patterns.length > 0
-                ?
-                event.output.patterns[0].id
+                ? event.output.patterns[0].id
                 : null,
             keyRoot: ({ event }) =>
               event.output.patterns.length > 0
-                ?
-                event.output.patterns[0].key_root
+                ? event.output.patterns[0].key_root
                 : "C",
             keyType: ({ event }) =>
               event.output.patterns.length > 0
-                ?
-                (event.output.patterns[0].key_type as "major" | "minor")
+                ? (event.output.patterns[0].key_type as "major" | "minor")
                 : "major",
             chordPalette: ({ event }) => {
               if (event.output.patterns.length > 0) {
                 try {
                   const palette = JSON.parse(
-
                     event.output.patterns[0].chord_palette,
                   );
                   return Array.isArray(palette) ? palette : [];
@@ -373,7 +381,6 @@ export const appMachine = setup({
       },
     },
     running: {
-
       initial: "editing",
       states: {
         editing: {
@@ -426,12 +433,10 @@ export const appMachine = setup({
                 },
                 updating: {
                   invoke: {
-
                     id: "updatePattern",
                     src: "updatePattern",
                     input: ({ event }) => {
                       if (event.type === "UPDATE_SAVED_PATTERN")
-
                         return event.input;
                       throw new Error("Invalid event for actor");
                     },
@@ -439,12 +444,10 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
                     },
-
                   },
                 },
                 creating: {
@@ -455,7 +458,6 @@ export const appMachine = setup({
                     input: ({ context, event }) => {
                       if (event.type === "CREATE_PATTERN")
                         return {
-
                           name: event.name,
                           notes: JSON.stringify(defaultPattern),
                           key_root: context.keyRoot,
@@ -468,8 +470,7 @@ export const appMachine = setup({
                     onDone: {
                       target: "reloading",
                       actions: assign({
-                        selectedPatternId: ({ event
-                        }) => event.output.id,
+                        selectedPatternId: ({ event }) => event.output.id,
                         patternName: ({ event }) => event.output.name,
                         currentPattern: ({ event }) =>
                           safeParsePattern(event.output.notes),
@@ -478,7 +479,6 @@ export const appMachine = setup({
                         keyType: ({ event }) =>
                           event.output.key_type as "major" | "minor",
                         chordPalette: [],
-
                       }),
                     },
                     onError: {
@@ -488,7 +488,6 @@ export const appMachine = setup({
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
-
                     },
                   },
                 },
@@ -506,12 +505,10 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
                     },
-
                   },
                 },
                 creatingChord: {
@@ -527,12 +524,10 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
                     },
-
                   },
                 },
                 updatingChord: {
@@ -548,12 +543,10 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
                     },
-
                   },
                 },
                 deletingChord: {
@@ -570,12 +563,10 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
                     },
-
                   },
                 },
                 creatingTuning: {
@@ -591,12 +582,10 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
                     },
-
                   },
                 },
                 updatingTuning: {
@@ -612,12 +601,10 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
                     },
-
                   },
                 },
                 deletingTuning: {
@@ -634,12 +621,10 @@ export const appMachine = setup({
                     onError: {
                       target: "idle",
                       actions: assign({
-
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
                       }),
                     },
-
                   },
                 },
                 reloading: {
@@ -661,18 +646,15 @@ export const appMachine = setup({
                       }),
                     },
                     onError: {
-
                       target: "idle",
                       actions: assign({
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
-
                       }),
                     },
                   },
                 },
                 reloadingAndResetting: {
-
                   invoke: {
                     id: "reloadInitialDataAfterDelete",
                     src: "fetchInitialData",
@@ -682,8 +664,7 @@ export const appMachine = setup({
                       actions: assign({
                         savedPatterns: ({ event }) => event.output.patterns,
                         savedChords: ({ event }) => event.output.chords,
-                        savedTunings: ({ event
-                        }) => event.output.tunings,
+                        savedTunings: ({ event }) => event.output.tunings,
                         errorMessage: null,
                         editingChordId: null,
                         editingTuningId: null,
@@ -698,12 +679,10 @@ export const appMachine = setup({
                       }),
                     },
                     onError: {
-
                       target: "idle",
                       actions: assign({
                         errorMessage: ({ event }) =>
                           getErrorMessage(event.error),
-
                       }),
                     },
                   },
@@ -717,7 +696,6 @@ export const appMachine = setup({
                 json: { on: { TOGGLE_VIEW: "visual" } },
                 visual: { on: { TOGGLE_VIEW: "json" } },
               },
-
             },
           },
           on: {
@@ -725,14 +703,12 @@ export const appMachine = setup({
             SELECT_SLOT: {
               target: "selectingChordForSlot",
               actions: assign({
-
                 activeSlot: ({ event }) => ({
                   sectionId: event.sectionId,
                   measureId: event.measureId,
                   slotIndex: event.slotIndex,
                 }),
               }),
-
             },
           },
         },
@@ -743,14 +719,12 @@ export const appMachine = setup({
           },
         },
         selectingChordForSlot: {
-
           on: {
             ASSIGN_CHORD_TO_SLOT: {
               target: "editing",
               actions: [
                 assign({
                   currentPattern: ({ context, event }) => {
-
                     const { activeSlot } = context;
                     if (!activeSlot) return context.currentPattern;
                     return context.currentPattern.map((section) => {
@@ -766,12 +740,10 @@ export const appMachine = setup({
                               return { ...measure, slots: newSlots };
                             }
                             return measure;
-
                           }),
                         };
                       }
                       return section;
-
                     });
                   },
                 }),
@@ -786,11 +758,9 @@ export const appMachine = setup({
                   currentPattern: ({ context, event }) => {
                     return context.currentPattern.map((section) => {
                       if (section.id === event.sectionId) {
-
                         return {
                           ...section,
                           measures: section.measures.map((measure) => {
-
                             if (measure.id === event.measureId) {
                               const newSlots = [...measure.slots];
                               newSlots[event.slotIndex] = null;
@@ -799,7 +769,6 @@ export const appMachine = setup({
                             }
                             return measure;
                           }),
-
                         };
                       }
                       return section;
@@ -824,6 +793,9 @@ export const appMachine = setup({
     UPDATE_ACTIVE_BEAT: {
       actions: assign({ activeBeat: ({ event }) => event.beat }),
     },
+    SET_BPM: {
+      actions: assign({ bpm: ({ event }) => event.value }),
+    },
     UPDATE_PATTERN_STRUCTURE: {
       actions: assign({ currentPattern: ({ event }) => event.value }),
     },
@@ -847,7 +819,6 @@ export const appMachine = setup({
         currentPattern: ({ context, event }) => {
           return context.currentPattern.map((section) => {
             if (section.id === event.sectionId) {
-
               const slots = getSlotsForTimeSignature(section.timeSignature);
               const newMeasure: Measure = {
                 id: nanoid(),
@@ -872,7 +843,8 @@ export const appMachine = setup({
         activeSlot: null,
       }),
     },
-    DUPLICATE_SECTION: { // <-- NEW ACTION
+    DUPLICATE_SECTION: {
+      // <-- NEW ACTION
 
       actions: assign({
         currentPattern: ({ context, event }) => {
@@ -891,11 +863,12 @@ export const appMachine = setup({
           newSection.id = nanoid();
 
           // 2. Assign new IDs to all measures within the section
-          newSection.measures = newSection.measures.map((measure: Measure) => ({
-
-            ...measure,
-            id: nanoid(),
-          }));
+          newSection.measures = newSection.measures.map(
+            (measure: Measure) => ({
+              ...measure,
+              id: nanoid(),
+            }),
+          );
           // Find the index of the original section
           const originalIndex = context.currentPattern.findIndex(
             (s) => s.id === event.sectionId,
@@ -930,7 +903,8 @@ export const appMachine = setup({
         activeSlot: null,
       }),
     },
-    MOVE_SECTION: { // <-- NEW ACTION
+    MOVE_SECTION: {
+      // <-- NEW ACTION
       actions: assign({
         currentPattern: ({ context, event }) => {
           const { currentPattern } = context;
@@ -953,7 +927,6 @@ export const appMachine = setup({
       }),
     },
     MOVE_CHORD: {
-
       actions: assign({
         currentPattern: ({ context, event }) => {
           const { source, target } = event;
@@ -1002,7 +975,6 @@ export const appMachine = setup({
       }),
     },
     COPY_SLOT: {
-
       actions: assign({
         clipboardChordId: ({ context }) => {
           const { activeSlot, currentPattern } = context;
@@ -1012,7 +984,6 @@ export const appMachine = setup({
             (s) => s.id === activeSlot.sectionId,
           );
           if (!section) return context.clipboardChordId;
-
 
           const measure = section.measures.find(
             (m) => m.id === activeSlot.measureId,
@@ -1025,7 +996,6 @@ export const appMachine = setup({
     },
     PASTE_SLOT: {
       actions: assign({
-
         currentPattern: ({ context }) => {
           const { activeSlot, currentPattern, clipboardChordId } = context;
           if (!activeSlot || clipboardChordId === null) {
@@ -1037,8 +1007,7 @@ export const appMachine = setup({
               return {
                 ...section,
                 measures: section.measures.map((measure) => {
-                  if (measure.id ===
-                    activeSlot.measureId) {
+                  if (measure.id === activeSlot.measureId) {
                     const newSlots = [...measure.slots];
                     newSlots[activeSlot.slotIndex] = clipboardChordId;
                     return { ...measure, slots: newSlots };
@@ -1060,7 +1029,6 @@ export const appMachine = setup({
             return context.currentPattern.map((section) => {
               if (section.id === event.sectionId) {
                 return {
-
                   ...section,
                   measures: section.measures.map((measure) => {
                     if (measure.id === event.measureId) {
@@ -1071,7 +1039,6 @@ export const appMachine = setup({
                     }
                     return measure;
                   }),
-
                 };
               }
               return section;
@@ -1124,8 +1091,7 @@ export const appMachine = setup({
         keyType: ({ context, event }) => {
           const selected = context.savedPatterns.find((p) => p.id === event.id);
           return selected
-            ?
-            (selected.key_type as "major" | "minor")
+            ? (selected.key_type as "major" | "minor")
             : context.keyType;
         },
         chordPalette: ({ context, event }) => {
@@ -1154,7 +1120,6 @@ export const appMachine = setup({
     },
     CANCEL_EDIT_TUNING: {
       actions: assign({ editingTuningId: null }),
-
     },
     SET_KEY_ROOT: {
       actions: assign({ keyRoot: ({ event }) => event.root }),
@@ -1175,10 +1140,10 @@ export const appMachine = setup({
       }),
     },
     CLEAR_CHORD_BANK_FILTERS: {
-      actions: assign({ chordBankFilterKey: null, chordBankFilterTuning: null }),
+      actions: assign({
+        chordBankFilterKey: null,
+        chordBankFilterTuning: null,
+      }),
     },
   },
 });
-
-
-

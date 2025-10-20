@@ -58,6 +58,7 @@ const machineWithImplementations = appMachine.provide({
 let appActor: Actor<typeof machineWithImplementations>;
 let lastScheduledPattern = "";
 let lastInstrument = "";
+let lastBpm = 0;
 const getContainer = (id: string) => {
   const el = document.querySelector<HTMLElement>(id);
   if (!el) throw new Error(`Could not find container with id: ${id}`);
@@ -83,11 +84,17 @@ const runApplication = () => {
   appActor.subscribe((snapshot) => {
     const selectedPatternId = selectors.selectSelectedPatternId(snapshot);
     const instrument = selectors.selectInstrument(snapshot);
+    const bpm = selectors.selectBpm(snapshot);
 
     // --- Switch instrument if changed ---
     if (instrument !== lastInstrument) {
       player.setInstrument(instrument);
       lastInstrument = instrument;
+    }
+
+    if (bpm !== lastBpm) {
+      player.setBpm(bpm);
+      lastBpm = bpm;
     }
 
     // --- Render UI Components ---
@@ -129,6 +136,7 @@ const runApplication = () => {
         keyRoot: selectors.selectKeyRoot(snapshot),
         keyType: selectors.selectKeyType(snapshot),
         instrument: instrument,
+        bpm: bpm,
       }),
 
       controlsContainer,
@@ -160,7 +168,10 @@ const runApplication = () => {
       ),
       tuningManagerContainer,
     );
-    render(ErrorMessage(selectors.selectErrorMessage(snapshot)), errorContainer);
+    render(
+      ErrorMessage(selectors.selectErrorMessage(snapshot)),
+      errorContainer,
+    );
 
     // --- Render Modals ---
     let modalContent = html``;
