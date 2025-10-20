@@ -36,7 +36,6 @@ const machineWithImplementations = appMachine.provide({
     ),
     createChord: fromPromise(({ input }) =>
       api.createChordEffect(input).pipe(Effect.runPromise),
-
     ),
     updateChord: fromPromise(({ input }) =>
       api.updateChordEffect(input).pipe(Effect.runPromise),
@@ -95,7 +94,6 @@ const runApplication = () => {
     if (selectedPatternId) {
       const viewMode = selectors.selectViewMode(snapshot);
       render(
-
         viewMode === "json"
           ? PatternEditor(selectors.selectCurrentPatternAsJson(snapshot))
           : VisualEditor(
@@ -107,7 +105,6 @@ const runApplication = () => {
         editorContainer,
       );
     } else {
-
       render(
         html`<div
           class="min-h-[240px] flex items-center justify-center text-center text-zinc-500"
@@ -201,6 +198,41 @@ const runApplication = () => {
 // --- INITIAL BOOTSTRAP ---
 render(AppShell(), getContainer("#app-shell"));
 runApplication();
+
+// --- GLOBAL KEYBOARD SHORTCUTS ---
+window.addEventListener("keydown", (e) => {
+  // Do not trigger shortcuts if a dialog/modal is open or if an input is focused.
+  const isInputFocused =
+    e.target instanceof HTMLInputElement ||
+    e.target instanceof HTMLTextAreaElement ||
+    e.target instanceof HTMLSelectElement;
+  const isModalOpen =
+    appActor.getSnapshot().matches({ running: "showingNewPatternDialog" }) ||
+    appActor.getSnapshot().matches({ running: "selectingChordForSlot" });
+
+  if (isInputFocused || isModalOpen) {
+    return;
+  }
+
+  if (e.ctrlKey && (e.key === " " || e.code === "Space")) {
+    e.preventDefault();
+    const { selectedPatternId } = appActor.getSnapshot().context;
+    if (selectedPatternId) {
+      player.togglePlayback();
+      appActor.send({ type: "TOGGLE_PLAYBACK" });
+    }
+  }
+
+  if (e.ctrlKey && (e.key === "r" || e.code === "KeyR")) {
+    e.preventDefault();
+    const { selectedPatternId } = appActor.getSnapshot().context;
+    if (selectedPatternId) {
+      player.stopAndRewind();
+      appActor.send({ type: "STOP_AND_REWIND" });
+    }
+  }
+});
+
 // --- VITE HMR ---
 if (import.meta.hot) {
   import.meta.hot.accept(() => {

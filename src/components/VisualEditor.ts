@@ -12,7 +12,17 @@ import {
   secondaryButtonClasses,
 } from "./styles";
 const TIME_SIGNATURES = [
-  "2/4", "3/4", "4/4", "5/4", "6/8", "7/8", "9/8", "11/8", "12/8", "13/8", "15/8",
+  "2/4",
+  "3/4",
+  "4/4",
+  "5/4",
+  "6/8",
+  "7/8",
+  "9/8",
+  "11/8",
+  "12/8",
+  "13/8",
+  "15/8",
 ];
 const renderSlot = (
   sectionId: string,
@@ -37,9 +47,9 @@ const renderSlot = (
   const slotClasses = `
     relative group flex items-center justify-center rounded text-center border h-12 text-xs min-w-16
     ${isPlaying
-      ? "bg-teal-700/50 border-teal-400" // New highlight class for playing slot
+      ? "bg-purple-700/50 border-purple-400" // Playback highlight
       : isActiveSelection
-        ? "bg-teal-400/20 border-teal-400"
+        ? "bg-blue-400/20 border-blue-400" // Active selection highlight
         : "bg-zinc-700/50 border-zinc-600 hover:border-zinc-400"
     }
     cursor-pointer transition-colors
@@ -55,14 +65,11 @@ const renderSlot = (
       measureId: measure.id,
       slotIndex,
     });
-    e.dataTransfer.setData(
-      "application/json",
-      dataToTransfer,
-    );
+    e.dataTransfer.setData("application/json", dataToTransfer);
     e.dataTransfer.effectAllowed = "move";
     // Set opacity directly within the event handler scope
     const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '0.4'; // Visual cue for the dragged element
+    target.style.opacity = "0.4"; // Visual cue for the dragged element
   };
   // Handler for when a dragged chord is hovering over another slot
   const handleDragOver = (e: DragEvent) => {
@@ -74,7 +81,11 @@ const renderSlot = (
       // Add yellow highlight classes to indicate a valid drop target
       if (!target.classList.contains("border-yellow-400")) {
         // Temporarily remove the zinc classes to ensure the yellow shows
-        target.classList.remove("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
+        target.classList.remove(
+          "bg-zinc-700/50",
+          "border-zinc-600",
+          "hover:border-zinc-400",
+        );
         target.classList.add("border-yellow-400", "bg-yellow-400/20");
       }
     } else {
@@ -90,7 +101,11 @@ const renderSlot = (
     target.classList.remove("border-yellow-400", "bg-yellow-400/20");
     // Restore the original zinc classes
     if (!isActiveSelection) {
-      target.classList.add("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
+      target.classList.add(
+        "bg-zinc-700/50",
+        "border-zinc-600",
+        "hover:border-zinc-400",
+      );
     }
   };
 
@@ -102,7 +117,11 @@ const renderSlot = (
     target.classList.remove("border-yellow-400", "bg-yellow-400/20");
     // Restore zinc classes on drop if not active
     if (!isActiveSelection) {
-      target.classList.add("bg-zinc-700/50", "border-zinc-600", "hover:border-zinc-400");
+      target.classList.add(
+        "bg-zinc-700/50",
+        "border-zinc-600",
+        "hover:border-zinc-400",
+      );
     }
 
     // Prevent dropping a chord onto a slot that is already occupied
@@ -128,7 +147,6 @@ const renderSlot = (
         sectionId: sectionId,
         measureId: measure.id,
         slotIndex: slotIndex,
-
       },
     });
   };
@@ -136,14 +154,13 @@ const renderSlot = (
   // Handler for when dragging of a chord slot ends
   const handleDragEnd = (e: DragEvent) => {
     const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '1'; // Reset opacity
+    target.style.opacity = "1"; // Reset opacity
   };
 
   return html`
     <div
       class=${slotClasses}
-      draggable=${chord ?
-      "true" : "false"}
+      draggable=${chord ? "true" : "false"}
       @dragstart=${handleDragStart}
       @dragover=${handleDragOver}
       @dragleave=${handleDragLeave}
@@ -159,12 +176,10 @@ const renderSlot = (
     }}
     >
       ${chord
-      ?
-      html`<span class="font-medium text-zinc-200">${chord.name}</span>`
+      ? html`<span class="font-medium text-zinc-200">${chord.name}</span>`
       : html`<span class="text-zinc-600">+</span>`}
-
       <button
-        class="absolute top-0 left-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-teal-600 text-white rounded-br-lg opacity-0 group-hover:opacity-100 transition-all text-xs font-bold"
+        class="absolute top-0 left-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-blue-600 text-white rounded-br-lg opacity-0 group-hover:opacity-100 transition-all text-xs font-bold"
         @click=${(e: Event) => {
       e.stopPropagation();
       appActor.send({
@@ -175,16 +190,13 @@ const renderSlot = (
       });
     }}
       >
-        ${chord ?
-      "✎" : "+"}
+        ${chord ? "✎" : "+"}
       </button>
 
       ${chord
-      ?
-      html`
-            <button
-              class="absolute top-0 right-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-red-600 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-all text-sm"
-              @click=${(e: Event) => {
+      ? html` <button
+            class="absolute top-0 right-0 w-5 h-5 flex items-center justify-center bg-zinc-600 hover:bg-red-600 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-all text-sm"
+            @click=${(e: Event) => {
           e.stopPropagation();
           appActor.send({
             type: "CLEAR_SLOT",
@@ -193,10 +205,9 @@ const renderSlot = (
             slotIndex,
           });
         }}
-            >
-              &times;
-</button>
-          `
+          >
+            &times;
+          </button>`
       : nothing}
     </div>
   `;
@@ -221,7 +232,7 @@ const renderMeasure = (
       <div
         class="grid gap-2 h-full"
         style="grid-template-columns: repeat(${beats}, minmax(0, 1fr));"
->
+      >
         ${beatSlots.map(
     (slots, beatIndex) => html`
             <div
@@ -229,9 +240,10 @@ const renderMeasure = (
               style="grid-template-columns: repeat(${subdivisions}, minmax(0, 1fr));"
             >
               ${slots.map((_, subdivisionIndex) => {
-      const slotIndex = beatIndex * subdivisions
-        + subdivisionIndex;
-      const currentTotalSlotIndex = totalSlotsBeforeMeasure + slotIndex; // Calculate total index
+      const slotIndex =
+        beatIndex * subdivisions + subdivisionIndex;
+      const currentTotalSlotIndex =
+        totalSlotsBeforeMeasure + slotIndex; // Calculate total index
 
       return renderSlot(
         section.id,
@@ -264,7 +276,7 @@ const renderSection = (
     e.dataTransfer.setData("text/plain", section.id);
     e.dataTransfer.effectAllowed = "move";
     // Add visual cue
-    (e.currentTarget as HTMLElement).style.opacity = '0.4';
+    (e.currentTarget as HTMLElement).style.opacity = "0.4";
   };
 
   const handleDragOver = (e: DragEvent) => {
@@ -272,17 +284,26 @@ const renderSection = (
     const sourceId = e.dataTransfer?.getData("text/plain");
     // Only apply visual cue if not dragging onto itself
     if (sourceId !== section.id) {
-      (e.currentTarget as HTMLElement).classList.add('border-dashed', 'border-teal-400');
+      (e.currentTarget as HTMLElement).classList.add(
+        "border-dashed",
+        "border-blue-400",
+      );
     }
   };
 
   const handleDragLeave = (e: DragEvent) => {
-    (e.currentTarget as HTMLElement).classList.remove('border-dashed', 'border-teal-400');
+    (e.currentTarget as HTMLElement).classList.remove(
+      "border-dashed",
+      "border-blue-400",
+    );
   };
 
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
-    (e.currentTarget as HTMLElement).classList.remove('border-dashed', 'border-teal-400');
+    (e.currentTarget as HTMLElement).classList.remove(
+      "border-dashed",
+      "border-blue-400",
+    );
 
     const sourceId = e.dataTransfer?.getData("text/plain");
     if (sourceId && sourceId !== section.id) {
@@ -296,7 +317,7 @@ const renderSection = (
 
   const handleDragEnd = (e: DragEvent) => {
     // Reset visual cue on the source element
-    (e.currentTarget as HTMLElement).style.opacity = '1';
+    (e.currentTarget as HTMLElement).style.opacity = "1";
   };
 
   // NEW: Calculate running beat index for measures
@@ -323,40 +344,44 @@ const renderSection = (
         timeSignature: (e.target as HTMLSelectElement).value,
       });
     }}
-      >
-        ${TIME_SIGNATURES.map(
+        >
+          ${TIME_SIGNATURES.map(
       (sig) =>
         html`<option
-              .value=${sig}
-              ?selected=${sig === section.timeSignature}
-            >
-              ${sig}
-           
-</option>`,
+                .value=${sig}
+                ?selected=${sig === section.timeSignature}
+              >
+                ${sig}
+              </option>`,
     )}
-      </select>
-      <div class="flex gap-2">
-        <button
-          class="${secondaryButtonClasses} !h-8 !px-3 !text-xs"
-          @click=${() => {
-      appActor.send({ type: "DUPLICATE_SECTION", sectionId: section.id });
+        </select>
+        <div class="flex gap-2">
+          <button
+            class="${secondaryButtonClasses} !h-8 !px-3 !text-xs"
+            @click=${() => {
+      appActor.send({
+        type: "DUPLICATE_SECTION",
+        sectionId: section.id,
+      });
     }}
-        >
-          Duplicate
-        </button>
-        <button
-          class="${destructiveButtonClasses} !h-8 !px-3 !text-xs"
-          @click=${() => {
+          >
+            Duplicate
+          </button>
+          <button
+            class="${destructiveButtonClasses} !h-8 !px-3 !text-xs"
+            @click=${() => {
       appActor.send({ type: "DELETE_SECTION", sectionId: section.id });
     }}
-        >
-          Delete Section
-        </button>
+          >
+            Delete Section
+          </button>
+        </div>
       </div>
-    </div>
-    <div class="flex gap-2 overflow-x-auto pb-2 items-center">
-      ${section.measures.map((measure) => {
-      const [beats, beatType] = section.timeSignature.split("/").map(Number);
+      <div class="flex gap-2 overflow-x-auto pb-2 items-center">
+        ${section.measures.map((measure) => {
+      const [beats, beatType] = section.timeSignature
+        .split("/")
+        .map(Number);
       const slotsPerMeasure = beats * (beatType === 8 ? 2 : 4);
       const slotsBefore = currentTotalSlots;
       currentTotalSlots += slotsPerMeasure; // Update running total for the next measure
@@ -370,20 +395,20 @@ const renderSection = (
         slotsBefore, // Pass the starting slot index
       );
     })}
-      <button
-        class="${secondaryButtonClasses} !h-12 !w-12 flex-shrink-0 flex items-center justify-center text-2xl"
-        @click=${() => {
+        <button
+          class="${secondaryButtonClasses} !h-12 !w-12 flex-shrink-0 flex items-center justify-center text-2xl"
+          @click=${() => {
       appActor.send({
         type: "ADD_MEASURE",
-        sectionId: section.id
+        sectionId: section.id,
       });
     }}
-      >
-        +
-      </button>
+        >
+          +
+        </button>
+      </div>
     </div>
-  </div>
-`;
+  `;
 };
 
 export const VisualEditor = (
@@ -422,7 +447,11 @@ export const VisualEditor = (
       @click=${(e: Event) => {
       const target = e.target as HTMLElement;
       // Check if the click occurred on the editor container itself, not an interactive child.
-      if (!target.closest('[class*="cursor-pointer"], button, select, input, form')) {
+      if (
+        !target.closest(
+          '[class*="cursor-pointer"], button, select, input, form',
+        )
+      ) {
         appActor.send({ type: "CLEAR_SLOT_SELECTION" });
       }
     }}
@@ -434,7 +463,9 @@ export const VisualEditor = (
       const slotsBefore = totalSlotsBeforeSection;
       // Calculate slots for the entire section
       const slotsInSection = section.measures.reduce((acc, measure) => {
-        const [beats, beatType] = section.timeSignature.split("/").map(Number);
+        const [beats, beatType] = section.timeSignature
+          .split("/")
+          .map(Number);
         return acc + beats * (beatType === 8 ? 2 : 4);
       }, 0);
       totalSlotsBeforeSection += slotsInSection; // Update running total
@@ -451,7 +482,7 @@ export const VisualEditor = (
           class="${secondaryButtonClasses} h-full flex-shrink-0 self-stretch"
           @click=${() => {
       appActor.send({
-        type: "ADD_SECTION"
+        type: "ADD_SECTION",
       });
     }}
         >
